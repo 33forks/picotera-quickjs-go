@@ -65,6 +65,13 @@ func (r *Runtime) NewContext() (*Context, error) {
 	return &Context{context: context, runtime: r}, nil
 }
 
+// Free releases the resources held by c.
+func (c *Context) Free() error {
+	lib.XJS_FreeContext(c.runtime.tls, c.context)
+	*c = Context{}
+	return nil
+}
+
 // Value represents a Javascript value which can be a primitive type or an
 // object. Reference counting is used, so it is important to explicitly
 // duplicate (Dup(), increment the reference count) or free (Free(), decrement
