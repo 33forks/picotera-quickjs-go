@@ -72,10 +72,23 @@ func (c *Context) Free() error {
 	return nil
 }
 
+// DupValue returns a copy of v while updating its associated reference count.
+func (c *Context) DupValue(v Value) Value {
+	return Value{val: lib.XDupValue(c.runtime.tls, c.context, v.val)}
+}
+
+// FreeValue updates the associated reference count of v and releases its
+// resources when the count becomes zero.
+func (c *Context) FreeValue(v Value) {
+	lib.XFreeValue(c.runtime.tls, c.context, v.val)
+}
+
 // Value represents a Javascript value which can be a primitive type or an
 // object. Reference counting is used, so it is important to explicitly
-// duplicate (Dup(), increment the reference count) or free (Free(), decrement
-// the reference count) Values.
+// duplicate (Context.DupValue(), increment the reference count) or free
+// (Context.FreeValue(), decrement the reference count) Values.
+//
+// Using a directly copied Value is not supported.
 type Value struct {
 	val lib.TJSValue
 }
