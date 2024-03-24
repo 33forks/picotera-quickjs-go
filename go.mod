@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	modernc.org/libc v1.47.0
-	modernc.org/libquickjs v0.1.1
+	modernc.org/libquickjs v0.1.2
 )
 
 require (
