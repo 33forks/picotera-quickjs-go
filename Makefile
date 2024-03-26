@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
 
-.PHONY:	all clean dev download edit editor work test
+.PHONY:	all clean dev download edit editor work test mem
 
 all: editor
 	golint 2>&1
@@ -30,3 +30,7 @@ work:
 	go work init
 	go work use .
 	go work use ../libquickjs
+
+mem: clean
+	go test -run @ -bench . -memprofile mem.out -memprofilerate 1 -timeout 24h
+	go tool pprof -lines -web -alloc_space *.test mem.out

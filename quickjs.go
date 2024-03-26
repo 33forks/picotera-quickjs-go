@@ -72,6 +72,13 @@ func (c *Context) Free() error {
 	return nil
 }
 
+// GetException returns c's current exception value and resets it to null. The
+// returned Value is owned by the caller and Free must be used to release its
+// resources.
+func (c *Context) GetException() Value {
+	return Value{val: lib.XJS_GetException(c.runtime.tls, c.context)}
+}
+
 // DupValue returns a copy of v while updating its associated reference count.
 func (c *Context) DupValue(v Value) Value {
 	return Value{val: lib.XDupValue(c.runtime.tls, c.context, v.val)}
