@@ -13,7 +13,6 @@ import (
 
 	"github.com/dop251/goja"
 	util "modernc.org/fileutil/ccgo"
-	// lib "modernc.org/libquickjs"
 )
 
 var (
