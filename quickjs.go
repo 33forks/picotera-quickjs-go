@@ -102,22 +102,21 @@ type Undefined struct{}
 
 // value "unpacks" 'v' into (<go-value>, <exception>) and frees 'v'.
 func (c *Context) value(v lib.TJSValue) (any, error) {
-	defer lib.XFreeValue(c.runtime.tls, c.context, v)
+	if v.Ftag < 0 {
+		// all tags with a reference count are negative
+		defer lib.XFreeValue(c.runtime.tls, c.context, v)
+	}
+
 	switch v.Ftag {
-	/* all tags with a reference count are negative */
-	// case lib.EJS_TAG_BIG_DECIMAL: // -11,
-	// case lib.EJS_TAG_BIG_INT: // -10,
-	// case lib.EJS_TAG_BIG_FLOAT: // -9,
-	// case lib.EJS_TAG_SYMBOL: // -8,
+	//TODO case lib.EJS_TAG_BIG_DECIMAL: // -11,
+	//TODO case lib.EJS_TAG_BIG_INT: // -10,
+	//TODO case lib.EJS_TAG_BIG_FLOAT: // -9,
 	case lib.EJS_TAG_STRING: // -7,
 		p := lib.XToCString(c.runtime.tls, c.context, v)
 
 		defer lib.XJS_FreeCString(c.runtime.tls, c.context, p)
 
 		return libc.GoString(p), nil
-	// case lib.EJS_TAG_MODULE: // -3, /* used internally */
-	// case lib.EJS_TAG_FUNCTION_BYTECODE: //  -2, /* used internally */
-	// case lib.EJS_TAG_OBJECT: // -1,
 	case lib.EJS_TAG_INT: //  0,
 		return *(*int32)(unsafe.Pointer(&v)), nil
 	case lib.EJS_TAG_BOOL: //  1,
@@ -126,8 +125,6 @@ func (c *Context) value(v lib.TJSValue) (any, error) {
 		return nil, nil
 	case lib.EJS_TAG_UNDEFINED: //  3,
 		return Undefined{}, nil
-	// case lib.EJS_TAG_UNINITIALIZED: // 4,
-	// case lib.EJS_TAG_CATCH_OFFSET: // 5,
 	case lib.EJS_TAG_EXCEPTION: // 6,
 		e := lib.XJS_GetException(c.runtime.tls, c.context)
 
