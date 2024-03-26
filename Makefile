@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
 
-.PHONY:	all clean dev download edit editor work test mem
+.PHONY:	all clean dev download edit editor work test mem short-test
 
 all: editor
 	golint 2>&1
@@ -23,6 +23,10 @@ editor:
 
 test:
 	go test -v -timeout 24h -count=1 2>&1 | tee log-test
+	grep -a 'TRC\|TODO\|ERRORF\|FAIL' log-test || true 2>&1 | tee -a log-test
+
+short-test:
+	go test -v -short -timeout 24h -count=1 2>&1 | tee log-test
 	grep -a 'TRC\|TODO\|ERRORF\|FAIL' log-test || true 2>&1 | tee -a log-test
 
 work:

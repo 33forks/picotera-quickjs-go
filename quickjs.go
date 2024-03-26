@@ -7,12 +7,13 @@
 //
 // See also https://bellard.org/quickjs/
 //
-// Portions of documentation are copied from the quickjs documentaion, see
+// Parts of the documentation were copied from the quickjs documentation, see
 // LICENSE-QUICKJS for details.
 package quickjs // import "modernc.org/quickjs"
 
 import (
 	"fmt"
+	"unsafe"
 
 	"modernc.org/libc"
 	lib "modernc.org/libquickjs"
@@ -72,37 +73,16 @@ func (c *Context) Free() error {
 	return nil
 }
 
-// GetException returns c's current exception value and resets it to null. The
-// returned Value is owned by the caller and Free must be used to release its
-// resources.
-func (c *Context) GetException() Value {
-	return Value{val: lib.XJS_GetException(c.runtime.tls, c.context)}
-}
+// Eval flags.
+const (
+	EvalGlobal = lib.MJS_EVAL_TYPE_GLOBAL // global code
+	EvalModule = lib.MJS_EVAL_TYPE_MODULE // module code
+)
 
-// DupValue returns a copy of v while updating its associated reference count.
-func (c *Context) DupValue(v Value) Value {
-	return Value{val: lib.XDupValue(c.runtime.tls, c.context, v.val)}
-}
+var evalFN = [...]byte{'<', 'e', 'v', 'a', 'l', '>', 0}
 
-// FreeValue updates the associated reference count of v and releases its
-// resources when the count becomes zero.
-func (c *Context) FreeValue(v Value) {
-	lib.XFreeValue(c.runtime.tls, c.context, v.val)
-}
-
-// Value represents a Javascript value which can be a primitive type or an
-// object. Reference counting is used, so it is important to explicitly
-// duplicate (Context.DupValue(), increment the reference count) or free
-// (Context.FreeValue(), decrement the reference count) Values.
-//
-// Using a directly copied Value is not supported.
-type Value struct {
-	val lib.TJSValue
-}
-
-// Eval evaluates a script or module source in 'js', pretending it originates
-// from 'filename'.
-func (c *Context) Eval(js, filename string, flags int) Value {
+// Eval evaluates a script or module source in 'js'.
+func (c *Context) Eval(js string, flags int) (any, error) {
 	tls := c.runtime.tls
 	ps, err := libc.CString(js)
 	if err != nil {
@@ -111,12 +91,55 @@ func (c *Context) Eval(js, filename string, flags int) Value {
 
 	defer libc.Xfree(tls, ps)
 
-	pfilename, err := libc.CString(filename)
-	if err != nil {
-		panic(err)
+	return c.value(lib.XJS_Eval(tls, c.context, ps, libc.Tsize_t(len(js)), uintptr(unsafe.Pointer(&evalFN)), int32(flags)))
+}
+
+// Unsupported represent an unsupported javascript value.
+type Unsupported struct{}
+
+// Undefined represents the javascript value "undefined".
+type Undefined struct{}
+
+// value "unpacks" 'v' into (<go-value>, <exception>) and frees 'v'.
+func (c *Context) value(v lib.TJSValue) (any, error) {
+	defer lib.XFreeValue(c.runtime.tls, c.context, v)
+	switch v.Ftag {
+	/* all tags with a reference count are negative */
+	// case lib.EJS_TAG_BIG_DECIMAL: // -11,
+	// case lib.EJS_TAG_BIG_INT: // -10,
+	// case lib.EJS_TAG_BIG_FLOAT: // -9,
+	// case lib.EJS_TAG_SYMBOL: // -8,
+	case lib.EJS_TAG_STRING: // -7,
+		p := lib.XToCString(c.runtime.tls, c.context, v)
+
+		defer lib.XJS_FreeCString(c.runtime.tls, c.context, p)
+
+		return libc.GoString(p), nil
+	// case lib.EJS_TAG_MODULE: // -3, /* used internally */
+	// case lib.EJS_TAG_FUNCTION_BYTECODE: //  -2, /* used internally */
+	// case lib.EJS_TAG_OBJECT: // -1,
+	case lib.EJS_TAG_INT: //  0,
+		return *(*int32)(unsafe.Pointer(&v)), nil
+	case lib.EJS_TAG_BOOL: //  1,
+		return *(*int32)(unsafe.Pointer(&v)) != 0, nil
+	case lib.EJS_TAG_NULL: //  2,
+		return nil, nil
+	case lib.EJS_TAG_UNDEFINED: //  3,
+		return Undefined{}, nil
+	// case lib.EJS_TAG_UNINITIALIZED: // 4,
+	// case lib.EJS_TAG_CATCH_OFFSET: // 5,
+	case lib.EJS_TAG_EXCEPTION: // 6,
+		e := lib.XJS_GetException(c.runtime.tls, c.context)
+
+		defer lib.XFreeValue(c.runtime.tls, c.context, e)
+
+		p := lib.XToCString(c.runtime.tls, c.context, e)
+
+		defer lib.XJS_FreeCString(c.runtime.tls, c.context, p)
+
+		return nil, fmt.Errorf("%s", libc.GoString(p))
+	case lib.EJS_TAG_FLOAT64: // 7,
+		return *(*float64)(unsafe.Pointer(&v)), nil
 	}
-
-	defer libc.Xfree(tls, pfilename)
-
-	return Value{val: lib.XJS_Eval(tls, c.context, ps, libc.Tsize_t(len(js)), pfilename, int32(flags))}
+	return Unsupported{}, nil
 }

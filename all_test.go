@@ -5,12 +5,15 @@
 package quickjs // import "modernc.org/bquickjs"
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 
 	"github.com/dop251/goja"
-	lib "modernc.org/libquickjs"
+	util "modernc.org/fileutil/ccgo"
+	// lib "modernc.org/libquickjs"
 )
 
 var (
@@ -22,26 +25,50 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func Test0(t *testing.T) {
+func TestEval(t *testing.T) {
 	rt, err := NewRuntime()
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	defer rt.Free()
 
 	ctx, err := rt.NewContext()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	v := ctx.Eval(`42 * 314`, "test.js", 0)
-	if g, e := v.val.Ftag, int64(lib.EJS_TAG_INT); g != e {
-		t.Logf("%+v", v)
-		t.Fatal(g, e)
-	}
+	defer ctx.Free()
 
-	if g, e := v.val.Fu.Fint321, int32(42*314); g != e {
-		t.Logf("%+v", v)
-		t.Fatal(g, e)
+	for _, test := range []struct {
+		js string
+		v  any
+	}{
+		{"42*314;", int32(42 * 314)},
+		{"'foo'+'bar';", "foobar"},
+		{"42 < 314;", true},
+		{"null;", nil},
+		{"undefined;", Undefined{}},
+		{"throw new Error('FAIL')", fmt.Errorf("Error: FAIL")},
+	} {
+		v, err := ctx.Eval(test.js, EvalGlobal)
+		t.Logf("%T(%[1]v) %v", v, err)
+		if err != nil {
+			switch x := test.v.(type) {
+			case error:
+				if g, e := err.Error(), x.Error(); g != e {
+					t.Fatal(g, e)
+				}
+
+				continue
+			default:
+				t.Fatal(err)
+			}
+		}
+
+		if g, e := v, test.v; g != e {
+			t.Fatal(g, e)
+		}
 	}
 }
 
@@ -57,30 +84,37 @@ function fib(n) {
 fib(10);
 `
 
-func TestFibCCGo(t *testing.T) {
+func TestFib(t *testing.T) {
+	t.Run("ccgo", testFibCCGo)
+	t.Run("goja", testFibGoja)
+}
+
+func testFibCCGo(t *testing.T) {
 	rt, err := NewRuntime()
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	defer rt.Free()
 
 	ctx, err := rt.NewContext()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	v := ctx.Eval(fib, "fib.js", 0)
-	if g, e := v.val.Ftag, int64(lib.EJS_TAG_INT); g != e {
-		t.Logf("%+v", v)
-		t.Fatal(g, e)
+	defer ctx.Free()
+
+	v, err := ctx.Eval(fib, 0)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	if g, e := v.val.Fu.Fint321, int32(55); g != e {
-		t.Logf("%+v", v)
-		t.Fatal(g, e)
+	if g, e := v, int32(55); g != e {
+		t.Fatalf("%T(%[1]v) %v", g, e)
 	}
 }
 
-func TestFibGoja(t *testing.T) {
+func testFibGoja(t *testing.T) {
 	rt := goja.New()
 	v, err := rt.RunString(fib)
 	if err != nil {
@@ -115,7 +149,9 @@ func benchmarkFibCCGO(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ctx.Eval(fib, "fib.js", 0)
+		if _, err := ctx.Eval(fib, 0); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -124,6 +160,123 @@ func benchmarkFibGoja(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		rt.RunString(fib)
+		if _, err := rt.RunString(fib); err != nil {
+			b.Fatal(err)
+		}
 	}
+}
+
+func TestArewefastyet(t *testing.T) {
+	if testing.Short() {
+		t.Skip("-short")
+	}
+
+	if err := util.InDir(filepath.Join("internal", "arewefastyet", "v8-v7"), func() error {
+		t.Run("ccgo", testArewefastyetCCGo)
+		t.Run("goja", testArewefastyetGoja)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+const run = `
+var printbuf = [];
+
+function print(s) {
+	printbuf.push(s);
+}
+
+var success = true;
+
+function PrintResult(name, result) {
+  print(name + ': ' + result);
+}
+
+
+function PrintError(name, error) {
+  throw new Error("FAIL "+name+": "+error);
+  // PrintResult(name, error);
+  // success = false;
+}
+
+
+function PrintScore(score) {
+  if (success) {
+    print('----');
+    print('Score (version ' + BenchmarkSuite.version + '): ' + score);
+  }
+}
+
+
+BenchmarkSuite.RunSuites({ NotifyResult: PrintResult,
+                           NotifyError: PrintError,
+                           NotifyScore: PrintScore });
+
+printbuf.join("\n");
+`
+
+var arewefastyetJS = []string{
+	"base.js",
+	"richards.js",
+	"deltablue.js",
+	"crypto.js",
+	"raytrace.js",
+	"earley-boyer.js",
+	"regexp.js",
+	"splay.js",
+	"navier-stokes.js",
+}
+
+func testArewefastyetCCGo(t *testing.T) {
+	rt, err := NewRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer rt.Free()
+
+	ctx, err := rt.NewContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer ctx.Free()
+
+	for _, fn := range arewefastyetJS {
+		b, err := os.ReadFile(fn)
+		if err != nil {
+			t.Fatal(fn, err)
+		}
+
+		if _, err = ctx.Eval(string(b), EvalGlobal); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	v, err := ctx.Eval(run, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log(v)
+}
+
+func testArewefastyetGoja(t *testing.T) {
+	rt := goja.New()
+	for _, v := range arewefastyetJS {
+		b, err := os.ReadFile(v)
+		if err != nil {
+			t.Fatal(v, err)
+		}
+
+		if _, err = rt.RunString(string(b)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	v, err := rt.RunString(run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(v.Export())
 }
