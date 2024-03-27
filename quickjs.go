@@ -2,10 +2,24 @@
 // Use of the source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package quickjs is a CGo-free wrapper of quickjs, a library
-// implementing an embeddable Javascript engine.
+// Package quickjs is a CGo-free wrapper of quickjs, a library implementing an
+// embeddable Javascript engine.
 //
 // See also https://bellard.org/quickjs/
+//
+// # Supported platforms and architectures
+//
+// These combinations of GOOS and GOARCH are currently supported
+//
+//	OS      Arch
+//	-------------
+//	linux	amd64
+//
+// # Builders
+//
+// Builder results are available at:
+//
+// https://modern-c.appspot.com/-/builder/?importpath=modernc.org%2fquickjs
 //
 // Parts of the documentation were copied from the quickjs documentation, see
 // LICENSE-QUICKJS for details.
@@ -21,7 +35,9 @@ import (
 
 // Runtime represents a Javascript runtime corresponding to an object heap.
 // Several Runtimes can exist at the same time but they cannot exchange
-// objects. Inside a given Runtime, no multi-threading is supported.
+// objects.
+//
+// Note: Runtime is not safe for concurrent use by multiple goroutines.
 type Runtime struct {
 	runtime uintptr // lib.TJSRuntime
 	tls     *libc.TLS
@@ -51,6 +67,8 @@ func (r *Runtime) Free() error {
 // own global objects and system objects. There can be several Contexts per
 // Runtime and they can share objects, similar to frames of the same origin
 // sharing Javascript objects in a web browser.
+//
+// Note: Context is not safe for concurrent use by multiple goroutines.
 type Context struct {
 	context uintptr // lib.TJSContext
 	runtime *Runtime
@@ -82,6 +100,20 @@ const (
 var evalFN = [...]byte{'<', 'e', 'v', 'a', 'l', '>', 0}
 
 // Eval evaluates a script or module source in 'js'.
+//
+//	QuickJS type 	result type	result error
+//	exception	nil		non-nil
+//	null		nil		nil
+//	undefined	Undefined	nil
+//	string		string		nil
+//	int		int		nil
+//	bool		bool		nil
+//	float64		floa64		nil
+//
+// More dynamic types may get supported in the future. The planned ones are
+// documented at:
+//
+//	https://bellard.org/quickjs/jsbignum.html
 func (c *Context) Eval(js string, flags int) (any, error) {
 	tls := c.runtime.tls
 	ps, err := libc.CString(js)
@@ -100,7 +132,8 @@ type Unsupported struct{}
 // Undefined represents the javascript value "undefined".
 type Undefined struct{}
 
-// value "unpacks" 'v' into (<go-value>, <exception>) and frees 'v'.
+// value "unpacks" 'v'. FreeValue(v) is called before returning, 'v' must not
+// be used afterwards.
 func (c *Context) value(v lib.TJSValue) (any, error) {
 	if v.Ftag < 0 {
 		// all tags with a reference count are negative
@@ -118,7 +151,7 @@ func (c *Context) value(v lib.TJSValue) (any, error) {
 
 		return libc.GoString(p), nil
 	case lib.EJS_TAG_INT: //  0,
-		return *(*int32)(unsafe.Pointer(&v)), nil
+		return int(*(*int32)(unsafe.Pointer(&v))), nil
 	case lib.EJS_TAG_BOOL: //  1,
 		return *(*int32)(unsafe.Pointer(&v)) != 0, nil
 	case lib.EJS_TAG_NULL: //  2,
