@@ -9,7 +9,8 @@
 //
 // # Supported platforms and architectures
 //
-// These combinations of GOOS and GOARCH are currently supported
+// The package is only a proof of concept at the moment. These combinations of
+// GOOS and GOARCH are currently supported
 //
 //	OS      Arch
 //	-------------
@@ -20,6 +21,22 @@
 // Builder results are available at:
 //
 // https://modern-c.appspot.com/-/builder/?importpath=modernc.org%2fquickjs
+//
+// # Preliminary performance results
+//
+// This package vs https://pkg.go.dev/github.com/dop251/goja
+//
+//	go test -run @ -bench .
+//	goos: linux
+//	goarch: amd64
+//	pkg: modernc.org/quickjs
+//	cpu: AMD Ryzen 9 3900X 12-Core Processor            
+//	BenchmarkArewefastyet/ccgo-24         	       1	113174608670 ns/op	      22024 B/op	        40 allocs/op
+//	BenchmarkArewefastyet/goja-24         	       1	191198664386 ns/op	28041319576 B/op	1768647379 allocs/op
+//	PASS
+//	ok  	modernc.org/quickjs	304.387s
+//
+// # Notes
 //
 // Parts of the documentation were copied from the quickjs documentation, see
 // LICENSE-QUICKJS for details.
@@ -113,7 +130,7 @@ var evalFN = [...]byte{'<', 'e', 'v', 'a', 'l', '>', 0}
 // More dynamic types may get supported in the future. The planned ones are
 // documented at:
 //
-//	https://bellard.org/quickjs/jsbignum.html
+// https://bellard.org/quickjs/jsbignum.html
 func (c *Context) Eval(js string, flags int) (any, error) {
 	tls := c.runtime.tls
 	ps, err := libc.CString(js)
