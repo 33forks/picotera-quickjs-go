@@ -31,10 +31,10 @@
 //	goarch: amd64
 //	pkg: modernc.org/quickjs
 //	cpu: AMD Ryzen 9 3900X 12-Core Processor            
-//	BenchmarkArewefastyet/ccgo-24         	       1	113174608670 ns/op	      22024 B/op	        40 allocs/op
-//	BenchmarkArewefastyet/goja-24         	       1	191198664386 ns/op	28041319576 B/op	1768647379 allocs/op
+//	BenchmarkArewefastyet/ccgo-24                  1        113174608670 ns/op            22024 B/op                40 allocs/op
+//	BenchmarkArewefastyet/goja-24                  1        191198664386 ns/op      28041319576 B/op        1768647379 allocs/op
 //	PASS
-//	ok  	modernc.org/quickjs	304.387s
+//	ok      modernc.org/quickjs     304.387s
 //
 // # Notes
 //
@@ -118,14 +118,14 @@ var evalFN = [...]byte{'<', 'e', 'v', 'a', 'l', '>', 0}
 
 // Eval evaluates a script or module source in 'js'.
 //
-//	QuickJS type 	result type	result error
-//	exception	nil		non-nil
-//	null		nil		nil
-//	undefined	Undefined	nil
-//	string		string		nil
-//	int		int		nil
-//	bool		bool		nil
-//	float64		floa64		nil
+//	QuickJS type    result type     result error
+//	exception       nil             non-nil
+//	null            nil             nil
+//	undefined       Undefined       nil
+//	string          string          nil
+//	int             int             nil
+//	bool            bool            nil
+//	float64         floa64          nil
 //
 // More dynamic types may get supported in the future. The planned ones are
 // documented at:
