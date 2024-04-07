@@ -6,6 +6,7 @@ package quickjs // import "modernc.org/bquickjs"
 
 import (
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -53,24 +54,78 @@ func TestEval(t *testing.T) {
 		{"throw new Error('FAIL')", fmt.Errorf("Error: FAIL")},
 	} {
 		v, err := ctx.Eval(test.js, EvalGlobal)
-		t.Logf("%T(%[1]v) %v", v, err)
+		t.Logf("%s: %T(%[1]v) %v", test.js, v, err)
 		if err != nil {
 			switch x := test.v.(type) {
 			case error:
 				if g, e := err.Error(), x.Error(); g != e {
-					t.Fatal(g, e)
+					t.Fatalf("FAIL %s: %v %v", test.js, g, e)
 				}
 
 				continue
 			default:
-				t.Fatal(err)
+				t.Errorf("FAIL %s: %v", test.js, err)
+				continue
 			}
 		}
 
 		if g, e := v, test.v; g != e {
-			t.Fatal(g, e)
+			t.Fatalf("FAIL %s: %T(%[1]v) %T(%[2]v)", test.js, g, e)
 		}
 	}
+}
+
+func TestEval2(t *testing.T) {
+	rt, err := NewRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer rt.Free()
+
+	ctx, err := rt.NewContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer ctx.Free()
+
+	for _, test := range []struct {
+		js string
+		v  any
+		sv string
+	}{
+		{"BigInt('1234567890123456789')", newBigInt(t, "1234567890123456789"), "1234567890123456789"},
+		{"BigInt('-1234567890123456789')", newBigInt(t, "-1234567890123456789"), "-1234567890123456789"},
+		{"1234567890123456789n", newBigInt(t, "1234567890123456789"), "1234567890123456789"},
+		{"-1234567890123456789n", newBigInt(t, "-1234567890123456789"), "-1234567890123456789"},
+	} {
+		v, err := ctx.Eval(test.js, EvalGlobal)
+		t.Logf("%s: %T(%[1]v) %v", test.js, v, err)
+		if err != nil {
+			t.Errorf("FAIL %s: %v", test.js, err)
+			continue
+		}
+
+		if g, e := fmt.Sprintf("%T", v), fmt.Sprintf("%T", test.v); g != e {
+			t.Errorf("FAIL %s: %T(%[1]v) %T(%[2]v)", test.js, g, e)
+			continue
+		}
+
+		if g, e := fmt.Sprint(v), test.sv; g != e {
+			t.Errorf("FAIL %v: %T(%[1]v) %T(%[2]v)", test.js, g, e)
+			continue
+		}
+	}
+}
+
+func newBigInt(t *testing.T, s string) *big.Int {
+	n := big.NewInt(0)
+	if _, ok := n.SetString(s, 10); !ok {
+		t.Fatalf("big.Int.SetString(%s) failed", s)
+	}
+
+	return n
 }
 
 const fib = `
@@ -217,6 +272,10 @@ func benchmarkArewefastyetGoja(b *testing.B, src []string) {
 }
 
 func TestMem(t *testing.T) {
+	if testing.Short() {
+		t.Skip("-short")
+	}
+
 	if !memgrind {
 		if _, err := util.Shell(nil, "go", "test", fmt.Sprintf("-short=%v", testing.Short()), "-v", "-tags", "libc.memgrind", "-timeout", "12h", "-run", "TestMemgrind"); err != nil {
 			t.Fatal(err)
