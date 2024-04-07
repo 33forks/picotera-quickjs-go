@@ -9,7 +9,7 @@ all: editor
 	staticcheck 2>&1
 
 bench:
-	go test -run @ -bench .
+	go test -run @ -bench . 2>&1 | tee log-bench
 
 clean:
 	rm -f log-* cpu.test mem.test *.out go.work*
@@ -25,11 +25,11 @@ editor:
 	go install -v  ./... 2>&1 | tee -a log-editor
 
 test:
-	go test -v -timeout 24h -count=1 2>&1 | tee log-test
+	go test -failfast -v -timeout 24h -count=1 2>&1 | tee log-test
 	grep -a 'TRC\|TODO\|ERRORF\|FAIL' log-test || true 2>&1 | tee -a log-test
 
 short-test:
-	go test -v -short -timeout 24h -count=1 2>&1 | tee log-test
+	go test -failfast -v -short -timeout 24h -count=1 2>&1 | tee log-test
 	grep -a 'TRC\|TODO\|ERRORF\|FAIL' log-test || true 2>&1 | tee -a log-test
 
 work:

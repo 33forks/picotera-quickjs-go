@@ -67,3 +67,18 @@ func TestMemgrind(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMemgrind2(t *testing.T) {
+	// Force libc environ allocation that may otherwise skew the accounting.
+	tls := libc.NewTLS()
+	tls.Close()
+
+	libc.MemAuditStart()
+
+	t.Run("eval1", testEval1)
+	t.Run("eval2", testEval2)
+
+	if err := libc.MemAuditReport(); err != nil {
+		t.Fatal(err)
+	}
+}

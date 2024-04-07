@@ -26,15 +26,14 @@
 //
 // This package vs https://pkg.go.dev/github.com/dop251/goja
 //
-//	go test -run @ -bench .
 //	goos: linux
 //	goarch: amd64
 //	pkg: modernc.org/quickjs
-//	cpu: AMD Ryzen 9 3900X 12-Core Processor
-//	BenchmarkArewefastyet/ccgo-24                  1        113174608670 ns/op            22024 B/op                40 allocs/op
-//	BenchmarkArewefastyet/goja-24                  1        191198664386 ns/op      28041319576 B/op        1768647379 allocs/op
+//	cpu: AMD Ryzen 9 3900X 12-Core Processor            
+//	BenchmarkArewefastyet/ccgo-24   1       109049381989 ns/op            22456 B/op                47 allocs/op
+//	BenchmarkArewefastyet/goja-24   1       189426235514 ns/op      28172865888 B/op        1765994482 allocs/op
 //	PASS
-//	ok      modernc.org/quickjs     304.387s
+//	ok  	modernc.org/quickjs	298.488s
 //
 // # Notes
 //
@@ -47,6 +46,7 @@ import (
 	"math/big"
 	"unsafe"
 
+	"github.com/ericlagergren/decimal"
 	"modernc.org/libc"
 	lib "modernc.org/libquickjs"
 )
@@ -92,6 +92,7 @@ type Context struct {
 	context      uintptr // lib.TJSContext
 	runtime      *Runtime
 	// Safe to share, not reference counted
+	int32_2  lib.TJSValue
 	int32_16 lib.TJSValue
 }
 
@@ -109,6 +110,7 @@ func (r *Runtime) NewContext() (*Context, error) {
 
 	return &Context{
 		context:      context,
+		int32_2:      lib.XNewInt32(r.tls, context, 2),
 		int32_16:     lib.XNewInt32(r.tls, context, 16),
 		runtime:      r,
 		toStringArgv: argv,
@@ -133,22 +135,19 @@ var evalFN = [...]byte{'<', 'e', 'v', 'a', 'l', '>', 0}
 
 // Eval evaluates a script or module source in 'js'.
 //
-//	QuickJS type    result Go type  result error
-//	--------------------------------------------
-//	exception       nil             non-nil
-//	null            nil             nil
-//	undefined       Undefined       nil
-//	string          string          nil
-//	int             int             nil
-//	bool            bool            nil
-//	float64         floa64          nil
-//	BigInt          *math/big.Int   nil
-//	any other type  Unsupported     nil
-//
-// More dynamic types may get supported in the future. The planned ones are
-// documented at:
-//
-// https://bellard.org/quickjs/jsbignum.html
+//	QuickJS type    result Go type                          result error
+//	--------------------------------------------------------------------
+//	exception       nil                                     non-nil
+//	null            nil                                     nil
+//	undefined       Undefined                               nil
+//	string          string                                  nil
+//	int             int                                     nil
+//	bool            bool                                    nil
+//	float64         floa64                                  nil
+//	BigInt          *math/big.Int                           nil
+//	BigFloat	*math/big.Float                         nil
+//	BigDecimal      *github.com/ericlagergren/decimal.Big   nil
+//	any other type  Unsupported                             nil
 func (c *Context) Eval(js string, flags int) (any, error) {
 	tls := c.runtime.tls
 	ps, err := libc.CString(js)
@@ -181,7 +180,28 @@ func (c *Context) value(v lib.TJSValue) (any, error) {
 	}
 
 	switch v.Ftag {
-	//TODO case lib.EJS_TAG_BIG_DECIMAL: // -11,
+	case lib.EJS_TAG_BIG_DECIMAL: // -11,
+		m := lib.XJS_GetPropertyStr(c.runtime.tls, c.context, v, toString)
+		if m.Ftag != lib.EJS_TAG_OBJECT {
+			panic("failed to get BigDecimal.toString()")
+		}
+
+		defer lib.XFreeValue(c.runtime.tls, c.context, m)
+
+		jsString := lib.XJS_Call(c.runtime.tls, c.context, m, v, 0, c.toStringArgv)
+
+		defer lib.XFreeValue(c.runtime.tls, c.context, jsString)
+
+		p := lib.XToCString(c.runtime.tls, c.context, jsString)
+
+		defer lib.XJS_FreeCString(c.runtime.tls, c.context, p)
+
+		n := decimal.New(0, 0)
+		if _, ok := n.SetString(libc.GoString(p)); !ok {
+			panic(todo("decimal.SetString failed"))
+		}
+
+		return n, nil
 	case lib.EJS_TAG_BIG_INT: // -10,
 		m := lib.XJS_GetPropertyStr(c.runtime.tls, c.context, v, toString)
 		if m.Ftag != lib.EJS_TAG_OBJECT {
@@ -205,7 +225,31 @@ func (c *Context) value(v lib.TJSValue) (any, error) {
 		}
 
 		return n, nil
-	// case lib.EJS_TAG_BIG_FLOAT: // -9,
+	case lib.EJS_TAG_BIG_FLOAT: // -9,
+		m := lib.XJS_GetPropertyStr(c.runtime.tls, c.context, v, toString)
+		if m.Ftag != lib.EJS_TAG_OBJECT {
+			panic("failed to get BigInt.toString()")
+		}
+
+		defer lib.XFreeValue(c.runtime.tls, c.context, m)
+
+		*(*lib.TJSValue)(unsafe.Pointer(c.toStringArgv)) = c.int32_16
+		jsString := lib.XJS_Call(c.runtime.tls, c.context, m, v, 1, c.toStringArgv)
+
+		defer lib.XFreeValue(c.runtime.tls, c.context, jsString)
+
+		p := lib.XToCString(c.runtime.tls, c.context, jsString)
+
+		defer lib.XJS_FreeCString(c.runtime.tls, c.context, p)
+
+		s := libc.GoString(p)
+		n := big.NewFloat(0)
+		n.SetPrec(uint(4 * len(s)))
+		if _, base, err := n.Parse(s, 16); base != 16 || err != nil {
+			panic(todo("big.Float.Parse failed"))
+		}
+
+		return n, nil
 	case lib.EJS_TAG_STRING: // -7,
 		p := lib.XToCString(c.runtime.tls, c.context, v)
 
@@ -239,4 +283,9 @@ func (c *Context) value(v lib.TJSValue) (any, error) {
 // AddIntrinsicBigFloat adds the BigFloat object.
 func (c *Context) AddIntrinsicBigFloat() {
 	lib.XJS_AddIntrinsicBigFloat(c.runtime.tls, c.context)
+}
+
+// AddIntrinsicBigDecimal adds the BigDecimal object.
+func (c *Context) AddIntrinsicBigDecimal() {
+	lib.XJS_AddIntrinsicBigDecimal(c.runtime.tls, c.context)
 }
