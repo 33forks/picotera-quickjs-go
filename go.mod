@@ -7,7 +7,7 @@ require (
 	github.com/ericlagergren/decimal v0.0.0-20240305081647-93d586550569
 	modernc.org/fileutil v1.3.0
 	modernc.org/libc v1.49.2
-	modernc.org/libquickjs v0.3.6
+	modernc.org/libquickjs v0.3.7
 )
 
 require (
