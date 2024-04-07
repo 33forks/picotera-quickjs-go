@@ -6,7 +6,7 @@ require (
 	github.com/dop251/goja v0.0.0-20240220182346-e401ed450204
 	modernc.org/fileutil v1.3.0
 	modernc.org/libc v1.49.2
-	modernc.org/libquickjs v0.3.5
+	modernc.org/libquickjs v0.3.6
 )
 
 require (
