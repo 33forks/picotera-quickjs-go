@@ -79,6 +79,8 @@ modernc.org/fileutil v1.3.0/go.mod h1:XatxS8fZi3pS8/hKG2GH/ArUogfxjpEKs3Ku3aK4Jy
 modernc.org/gc/v2 v2.4.1 h1:9cNzOqPyMJBvrUipmynX0ZohMhcxPtMccYgGOJdOiBw=
 modernc.org/libc v1.49.2 h1:Orwx0/7S7n5GCug2ANrqW0e7ZBu1mteep7xFkZCNydk=
 modernc.org/libc v1.49.2/go.mod h1:yMZuGkn7pXbKfoT/M35gFJOAEdSKdxL0q64sF7KqCDo=
+modernc.org/libc v1.49.3 h1:j2MRCRdwJI2ls/sGbeSk0t2bypOG/uvPZUsGQFDulqg=
+modernc.org/libc v1.49.3/go.mod h1:yMZuGkn7pXbKfoT/M35gFJOAEdSKdxL0q64sF7KqCDo=
 modernc.org/libquickjs v0.3.7 h1:qAR8gr6pfkRa18hOPR8ismt6fDNMub4n4HXKDZbecxE=
 modernc.org/libquickjs v0.3.7/go.mod h1:d+zhO25D86AobpeuP5WiYi+MU6m0aEL5yusn591XewE=
 modernc.org/mathutil v1.6.0 h1:fRe9+AmYlaej+64JsEEhoWuAYBkOtQiMEU7n/XgfYi4=
