@@ -146,7 +146,7 @@ var evalFN = [...]byte{'<', 'e', 'v', 'a', 'l', '>', 0}
 //	float64         floa64                                  nil
 //	BigInt          *math/big.Int                           nil
 //	BigFloat	*math/big.Float                         nil
-//	BigDecimal      *github.com/shopspring/decimal.Big      nil
+//	BigDecimal      github.com/shopspring/decimal.Decimal   nil
 //	any other type  Unsupported                             nil
 func (c *Context) Eval(js string, flags int) (any, error) {
 	tls := c.runtime.tls
