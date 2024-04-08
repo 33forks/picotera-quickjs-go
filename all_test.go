@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/dop251/goja"
-	"github.com/ericlagergren/decimal"
+	"github.com/shopspring/decimal"
 	util "modernc.org/fileutil/ccgo"
 )
 
@@ -110,10 +110,10 @@ func testEval2(t *testing.T) {
 		{"-1234567890123456789n", newBigInt(t, "-1234567890123456789"), "-1234567890123456789"},
 		{"BigFloat('1234567890.123456789e+5')", newBigFloat(t, "1234567890.123456789e+5"), "1.234567890123456789e+14"},
 		{"BigFloat('-1234567890.123456789e+5')", newBigFloat(t, "-1234567890.123456789e+5"), "-1.23456789012345678899999999999999994e+14"},
-		{"BigDecimal('1234567890.123456789')", newBigDecimal(t, "1234567890.123456789e"), "1234567890.123456789"},
-		{"BigDecimal('1234567890.123456789')", newBigDecimal(t, "1234567890.123456789e"), "1234567890.123456789"},
-		{"1234567890.123456789m", newBigDecimal(t, "1234567890.123456789e"), "1234567890.123456789"},
-		{"-1234567890.123456789m", newBigDecimal(t, "-1234567890.123456789e"), "-1234567890.123456789"},
+		{"BigDecimal('1234567890.123456789')", newBigDecimal(t, "1234567890.123456789"), "1234567890.123456789"},
+		{"BigDecimal('1234567890.123456789')", newBigDecimal(t, "1234567890.123456789"), "1234567890.123456789"},
+		{"1234567890.123456789m", newBigDecimal(t, "1234567890.123456789"), "1234567890.123456789"},
+		{"-1234567890.123456789m", newBigDecimal(t, "-1234567890.123456789"), "-1234567890.123456789"},
 	} {
 		v, err := ctx.Eval(test.js, EvalGlobal)
 		t.Logf("%s: %T(%[1]v) %v", test.js, v, err)
@@ -153,10 +153,10 @@ func newBigFloat(t *testing.T, s string) *big.Float {
 	return n
 }
 
-func newBigDecimal(t *testing.T, s string) *decimal.Big {
-	n := decimal.New(0, 0)
-	if _, ok := n.SetString(s); !ok {
-		t.Fatalf("decimal.Big.SetString(%q) failed", s)
+func newBigDecimal(t *testing.T, s string) decimal.Decimal {
+	n, err := decimal.NewFromString(s)
+	if err != nil {
+		t.Fatalf("decimal.NewFromString(%q) failed", s)
 	}
 
 	return n

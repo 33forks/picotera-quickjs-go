@@ -29,7 +29,7 @@
 //	goos: linux
 //	goarch: amd64
 //	pkg: modernc.org/quickjs
-//	cpu: AMD Ryzen 9 3900X 12-Core Processor            
+//	cpu: AMD Ryzen 9 3900X 12-Core Processor
 //	BenchmarkArewefastyet/ccgo-24   1       109049381989 ns/op            22456 B/op                47 allocs/op
 //	BenchmarkArewefastyet/goja-24   1       189426235514 ns/op      28172865888 B/op        1765994482 allocs/op
 //	PASS
@@ -46,7 +46,7 @@ import (
 	"math/big"
 	"unsafe"
 
-	"github.com/ericlagergren/decimal"
+	"github.com/shopspring/decimal"
 	"modernc.org/libc"
 	lib "modernc.org/libquickjs"
 )
@@ -146,7 +146,7 @@ var evalFN = [...]byte{'<', 'e', 'v', 'a', 'l', '>', 0}
 //	float64         floa64                                  nil
 //	BigInt          *math/big.Int                           nil
 //	BigFloat	*math/big.Float                         nil
-//	BigDecimal      *github.com/ericlagergren/decimal.Big   nil
+//	BigDecimal      *github.com/shopspring/decimal.Big      nil
 //	any other type  Unsupported                             nil
 func (c *Context) Eval(js string, flags int) (any, error) {
 	tls := c.runtime.tls
@@ -196,9 +196,9 @@ func (c *Context) value(v lib.TJSValue) (any, error) {
 
 		defer lib.XJS_FreeCString(c.runtime.tls, c.context, p)
 
-		n := decimal.New(0, 0)
-		if _, ok := n.SetString(libc.GoString(p)); !ok {
-			panic(todo("decimal.SetString failed"))
+		n, err := decimal.NewFromString(libc.GoString(p))
+		if err != nil {
+			panic(todo("decimal.NewFromString failed"))
 		}
 
 		return n, nil
