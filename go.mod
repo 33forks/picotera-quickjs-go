@@ -7,7 +7,7 @@ require (
 	github.com/shopspring/decimal v1.3.1
 	modernc.org/fileutil v1.3.0
 	modernc.org/libc v1.49.3
-	modernc.org/libquickjs v0.3.7
+	modernc.org/libquickjs v0.3.8
 )
 
 require (
