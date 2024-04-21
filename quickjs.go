@@ -367,10 +367,10 @@ func (c *Context) newObject(v lib.TJSValue) *Object {
 	return &Object{json: libc.GoString(p)}
 }
 
-// Unsupported represents an unsupported javascript value.
+// Unsupported represents an unsupported Javascript value.
 type Unsupported struct{}
 
-// Undefined represents the javascript value "undefined".
+// Undefined represents the Javascript value "undefined".
 type Undefined struct{}
 
 var (
