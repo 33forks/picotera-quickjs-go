@@ -205,8 +205,8 @@ func (c *Context) globalObject() lib.TJSValue {
 //	*math/big.Int                           BigInt
 //	*math/big.Float                         BigFloat
 //	github.com/shopspring/decimal.Decimal   BigDecimal
-//	*Object					object
-//	any other type				object from JSON produced by encoding.json/Marshall(arg)
+//	*Object                                 object
+//	any other type                          object from JSON produced by encoding.json/Marshall(arg)
 func (c *Context) Call(function string, args ...any) (r any, err error) {
 	tls := c.runtime.tls
 	ctx := c.context
