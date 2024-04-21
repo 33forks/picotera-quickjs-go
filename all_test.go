@@ -40,14 +40,14 @@ func testEval1(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	defer rt.Free()
+	defer rt.Close()
 
 	ctx, err := rt.NewContext()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer ctx.Free()
+	defer ctx.Close()
 
 	for _, test := range []struct {
 		js string
@@ -88,14 +88,14 @@ func testEval2(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	defer rt.Free()
+	defer rt.Close()
 
 	ctx, err := rt.NewContext()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer ctx.Free()
+	defer ctx.Close()
 
 	ctx.AddIntrinsicBigFloat()
 	ctx.AddIntrinsicBigDecimal()
@@ -141,14 +141,14 @@ func testEval3(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	defer rt.Free()
+	defer rt.Close()
 
 	ctx, err := rt.NewContext()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer ctx.Free()
+	defer ctx.Close()
 
 	for _, test := range []struct {
 		js string
@@ -173,6 +173,179 @@ func testEval3(t *testing.T) {
 			}
 		default:
 			t.Errorf("unexpected result type: %T", x)
+		}
+	}
+}
+
+func TestCall0(t *testing.T) {
+	t.Run("call1", testCall1)
+	t.Run("call2", testCall2)
+	t.Run("call3", testCall3)
+}
+
+func testCall1(t *testing.T) {
+	rt, err := NewRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer rt.Close()
+
+	ctx, err := rt.NewContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer ctx.Close()
+
+	for _, test := range []struct {
+		js string
+	}{
+		{`42;`},
+		{`var a = 42; a;`},
+		{`var a = { }; a;`},
+	} {
+		v, err := ctx.CallFunction(test.js)
+		t.Logf("js=`%s`: v=%T(%[2]v) err=%T(%[3]v)", test.js, v, err)
+		if err == nil {
+			t.Errorf("FAIL js=`%s`: expected non nil err", test.js)
+		}
+	}
+}
+
+func testCall2(t *testing.T) {
+	rt, err := NewRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer rt.Close()
+
+	ctx, err := rt.NewContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer ctx.Close()
+
+	ctx.AddIntrinsicBigFloat()
+	ctx.AddIntrinsicBigDecimal()
+
+	for _, test := range []struct {
+		js string
+		v  any
+	}{
+		{`function f() { return null; }; f`, nil},
+		{`function f() { return undefined; }; f`, Undefined{}},
+		{`function f() { return "foo"; }; f`, "foo"},
+		{`function f() { return 42; }; f`, 42},
+		{`function f() { return true; }; f`, true},
+		{`function f() { return 3.14; }; f`, 3.14},
+		{`function f() { return 1n; }; f`, 1},
+		{`function f() { return BigFloat('0.5'); }; f`, 0.5},
+		{`function f() { return 12.34m; }; f`, "12.34"},
+		{`function f() { return {1:2,3:4}; }; f`, `{"1":2,"3":4}`},
+	} {
+		v, err := ctx.CallFunction(test.js)
+		t.Logf("js=`%s`: v=%T(%[2]v) err=%T(%[3]v)", test.js, v, err)
+		if err != nil {
+			t.Errorf("FAIL js=`%s`: err=%v", test.js, err)
+		}
+
+		switch x := v.(type) {
+		case nil:
+			if test.v != nil {
+				t.Errorf("expected nil")
+			}
+		case Undefined, string, int, bool, float64:
+			if g, e := x, test.v; g != e {
+				t.Errorf("got %v, expected %v", g, e)
+			}
+		case *big.Int:
+			if g, e := x, big.NewInt(int64(test.v.(int))); g.Cmp(e) != 0 {
+				t.Errorf("got %v, expected %v", g, e)
+			}
+		case *big.Float:
+			if g, e := x, big.NewFloat(float64(test.v.(float64))); g.Cmp(e) != 0 {
+				t.Errorf("got %v, expected %v", g, e)
+			}
+		case decimal.Decimal:
+			if g, e := x.String(), test.v; g != e {
+				t.Errorf("got %v, expected %v", g, e)
+			}
+		case *Object:
+			if g, e := x.json, test.v; g != e {
+				t.Errorf("got %v, expected %v", g, e)
+			}
+		default:
+			panic(todo("%T", x))
+		}
+	}
+}
+
+func testCall3(t *testing.T) {
+	rt, err := NewRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer rt.Close()
+
+	ctx, err := rt.NewContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer ctx.Close()
+
+	ctx.AddIntrinsicBigFloat()
+	ctx.AddIntrinsicBigDecimal()
+
+	for _, test := range []struct {
+		js   string
+		args []any
+		v    any
+	}{
+		{`function f(a) { return a; }; f`, nil, Undefined{}},
+		{`function f(a) { return a; }; f`, []any{nil}, nil},
+		{`function f(a) { return a; }; f`, []any{Undefined{}}, Undefined{}},
+		{`function f(a) { return a; }; f`, []any{"foo"}, "foo"},
+		{`function f(a) { return a; }; f`, []any{big.NewInt(42)}, 42},
+		{`function f(a) { return a; }; f`, []any{big.NewFloat(0.5)}, 0.5},
+	} {
+		v, err := ctx.CallFunction(test.js, test.args...)
+		t.Logf("js=`%s`: v=%T(%[2]v) err=%T(%[3]v)", test.js, v, err)
+		if err != nil {
+			t.Errorf("FAIL js=`%s`: err=%v", test.js, err)
+		}
+
+		switch x := v.(type) {
+		case nil:
+			if test.v != nil {
+				t.Errorf("expected nil")
+			}
+		case Undefined, string, int, bool, float64:
+			if g, e := x, test.v; g != e {
+				t.Errorf("got %v, expected %v", g, e)
+			}
+		case *big.Int:
+			if g, e := x, big.NewInt(int64(test.v.(int))); g.Cmp(e) != 0 {
+				t.Errorf("got %v, expected %v", g, e)
+			}
+		case *big.Float:
+			if g, e := x, big.NewFloat(float64(test.v.(float64))); g.Cmp(e) != 0 {
+				t.Errorf("got %v, expected %v", g, e)
+			}
+		// case decimal.Decimal:
+		// 	if g, e := x.String(), test.v; g != e {
+		// 		t.Errorf("got %v, expected %v", g, e)
+		// 	}
+		// case *Object:
+		// 	if g, e := x.json, test.v; g != e {
+		// 		t.Errorf("got %v, expected %v", g, e)
+		// 	}
+		default:
+			panic(todo("%T", x))
 		}
 	}
 }
@@ -228,14 +401,14 @@ func testFibCCGo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	defer rt.Free()
+	defer rt.Close()
 
 	ctx, err := rt.NewContext()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer ctx.Free()
+	defer ctx.Close()
 
 	v, err := ctx.Eval(fib, EvalGlobal)
 	if err != nil {
@@ -315,14 +488,14 @@ func benchmarkArewefastyetCCGo(b *testing.B, src []string) {
 		b.Fatal(err)
 	}
 
-	defer rt.Free()
+	defer rt.Close()
 
 	ctx, err := rt.NewContext()
 	if err != nil {
 		b.Fatal(err)
 	}
 
-	defer ctx.Free()
+	defer ctx.Close()
 
 	b.ReportAllocs()
 	b.ResetTimer()

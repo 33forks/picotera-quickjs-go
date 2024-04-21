@@ -45,14 +45,14 @@ func TestMemgrind(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		defer rt.Free()
+		defer rt.Close()
 
 		ctx, err := rt.NewContext()
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		defer ctx.Free()
+		defer ctx.Close()
 
 		for _, v := range src {
 			if _, err := ctx.Eval(v, EvalGlobal); err != nil {
@@ -77,6 +77,10 @@ func TestMemgrind2(t *testing.T) {
 
 	t.Run("eval1", testEval1)
 	t.Run("eval2", testEval2)
+	t.Run("eval3", testEval3)
+	t.Run("call1", testCall1)
+	t.Run("call2", testCall2)
+	t.Run("call3", testCall3)
 
 	if err := libc.MemAuditReport(); err != nil {
 		t.Fatal(err)

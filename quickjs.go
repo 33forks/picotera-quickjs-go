@@ -84,8 +84,8 @@ func NewRuntime() (*Runtime, error) {
 	return &Runtime{runtime: runtime, tls: tls}, nil
 }
 
-// Free releases the resources held by r.
-func (r *Runtime) Free() error {
+// Close releases the resources held by r.
+func (r *Runtime) Close() error {
 	lib.XJS_FreeRuntime(r.tls, r.runtime)
 	r.tls.Close()
 	*r = Runtime{}
@@ -128,8 +128,8 @@ func (r *Runtime) NewContext() (*Context, error) {
 	}, nil
 }
 
-// Free releases the resources held by c.
-func (c *Context) Free() error {
+// Close releases the resources held by c.
+func (c *Context) Close() error {
 	libc.Xfree(c.runtime.tls, c.toStringArgv)
 	lib.XJS_FreeContext(c.runtime.tls, c.context)
 	*c = Context{}
@@ -146,20 +146,20 @@ var evalFN = [...]byte{'<', 'e', 'v', 'a', 'l', '>', 0}
 
 // Eval evaluates a script or module source in 'js'.
 //
-//	QuickJS type    result Go type                          result error
-//	--------------------------------------------------------------------
-//	exception       nil                                     non-nil
-//	null            nil                                     nil
-//	undefined       Undefined                               nil
-//	string          string                                  nil
-//	int             int                                     nil
-//	bool            bool                                    nil
-//	float64         floa64                                  nil
-//	BigInt          *math/big.Int                           nil
-//	BigFloat        *math/big.Float                         nil
-//	BigDecimal      github.com/shopspring/decimal.Decimal   nil
-//	object          *Object                                 nil
-//	any other type  Unsupported                             nil
+//	Javascript result type  Go result type                          Go result error
+//	-------------------------------------------------------------------------------
+//	exception               nil                                     non-nil
+//	null                    nil                                     nil
+//	undefined               Undefined                               nil
+//	string                  string                                  nil
+//	int                     int                                     nil
+//	bool                    bool                                    nil
+//	float64                 float64                                 nil
+//	BigInt                  *math/big.Int                           nil
+//	BigFloat                *math/big.Float                         nil
+//	BigDecimal              github.com/shopspring/decimal.Decimal   nil
+//	object                  *Object                                 nil
+//	any other type          Unsupported                             nil
 func (c *Context) Eval(js string, flags int) (r any, err error) {
 	tls := c.runtime.tls
 	ps, err := libc.CString(js)
@@ -172,7 +172,126 @@ func (c *Context) Eval(js string, flags int) (r any, err error) {
 	return c.value(lib.XJS_Eval(tls, c.context, ps, libc.Tsize_t(len(js)), uintptr(unsafe.Pointer(&evalFN)), int32(flags)))
 }
 
-// Object represents a Javascript object.
+func (c *Context) eval(js string, flags int) lib.TJSValue {
+	tls := c.runtime.tls
+	ctx := c.context
+	ps, err := libc.CString(js)
+	if err != nil {
+		panic(err)
+	}
+
+	defer libc.Xfree(tls, ps)
+
+	return lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(js)), uintptr(unsafe.Pointer(&evalFN)), int32(flags))
+}
+
+func (c *Context) globalObject() lib.TJSValue {
+	return lib.XJS_GetGlobalObject(c.runtime.tls, c.context)
+}
+
+// CallFunction evaluates 'js(args)' and returns the resulting (value, error).
+//
+// Argument types must be one of:
+//
+//	Go argument type                        Javascript argument type
+//	----------------------------------------------------------------
+//	nil                                     null
+//	Undefined                               undefined
+//	string                                  string
+//	int                                     int
+//	bool                                    bool
+//	float64                                 float64
+//	*math/big.Int                           BigInt
+//	*math/big.Float                         BigFloat
+//	github.com/shopspring/decimal.Decimal   BigDecimal
+//	*Object					object
+//	any other type				object from JSON produced by encoding.json/Unmarshall(arg)
+func (c *Context) CallFunction(js string, args ...any) (r any, err error) {
+	tls := c.runtime.tls
+	ctx := c.context
+	ps, err := libc.CString(js)
+	if err != nil {
+		panic(err)
+	}
+
+	defer libc.Xfree(tls, ps)
+
+	f := lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(js)), uintptr(unsafe.Pointer(&evalFN)), int32(EvalGlobal))
+
+	defer lib.XFreeValue(tls, ctx, f)
+
+	g := c.globalObject()
+
+	defer lib.XFreeValue(tls, ctx, g)
+
+	return c.call(f, g, args...)
+}
+
+func (c *Context) call(f, this lib.TJSValue, args ...any) (r any, err error) {
+	tls := c.runtime.tls
+	ctx := c.context
+	if lib.XJS_IsFunction(tls, ctx, f) == 0 {
+		return nil, fmt.Errorf("cannot call a non-function")
+	}
+
+	var jsArgs []lib.TJSValue
+	for _, v := range args {
+		switch x := v.(type) {
+		case nil:
+			jsArgs = append(jsArgs, null)
+		case Undefined:
+			jsArgs = append(jsArgs, undefined)
+		case string:
+			p, err := libc.CString(x)
+			if err != nil {
+				return nil, err
+			}
+
+			defer libc.Xfree(tls, p)
+
+			jv := lib.XJS_NewStringLen(tls, ctx, p, libc.Tsize_t(len(x)))
+
+			defer lib.XFreeValue(tls, ctx, jv)
+
+			jsArgs = append(jsArgs, jv)
+		case *big.Int:
+			s := x.String() + "n"
+			jv := c.eval(s, EvalGlobal)
+
+			defer lib.XFreeValue(tls, ctx, jv)
+
+			jsArgs = append(jsArgs, jv)
+		case *big.Float:
+			s := fmt.Sprintf("BigFloat('%s')", x.String())
+			jv := c.eval(s, EvalGlobal)
+
+			defer lib.XFreeValue(tls, ctx, jv)
+
+			jsArgs = append(jsArgs, jv)
+		default:
+			panic(todo("%T", x))
+		}
+	}
+
+	var argv uintptr
+	if len(jsArgs) != 0 {
+		sz := libc.Tsize_t(unsafe.Sizeof(lib.TJSValue{}) * uintptr(len(jsArgs)))
+		argv = libc.Xmalloc(tls, sz)
+
+		defer libc.Xfree(tls, argv)
+
+		for i, v := range jsArgs {
+			unsafe.Slice((*lib.TJSValue)(unsafe.Pointer(argv)), len(jsArgs))[i] = v
+		}
+
+	}
+	return c.value(lib.XJS_Call(tls, ctx, f, this, int32(len(jsArgs)), argv))
+}
+
+// Object represents the value of a Javascript object.
+//
+// Different Object instances derived from the same Javascript object may or
+// may not compare equal.
 type Object struct {
 	json string
 }
@@ -316,12 +435,12 @@ func (c *Context) value(v lib.TJSValue) (r any, err error) {
 	return Unsupported{}, nil
 }
 
-// AddIntrinsicBigFloat adds the BigFloat object.
+// AddIntrinsicBigFloat adds the BigFloat object to 'c'.
 func (c *Context) AddIntrinsicBigFloat() {
 	lib.XJS_AddIntrinsicBigFloat(c.runtime.tls, c.context)
 }
 
-// AddIntrinsicBigDecimal adds the BigDecimal object.
+// AddIntrinsicBigDecimal adds the BigDecimal object to 'c'.
 func (c *Context) AddIntrinsicBigDecimal() {
 	lib.XJS_AddIntrinsicBigDecimal(c.runtime.tls, c.context)
 }
