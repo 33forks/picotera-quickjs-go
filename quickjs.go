@@ -144,7 +144,7 @@ const (
 
 var evalFN = [...]byte{'<', 'e', 'v', 'a', 'l', '>', 0}
 
-// Eval evaluates a script or module source in 'js'.
+// Eval evaluates a script or module source in 'javascript'.
 //
 //	Javascript result type  Go result type                          Go result error
 //	-------------------------------------------------------------------------------
