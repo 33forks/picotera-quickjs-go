@@ -47,6 +47,7 @@ package quickjs // import "modernc.org/quickjs"
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"unsafe"
 
@@ -205,7 +206,7 @@ func (c *Context) globalObject() lib.TJSValue {
 //	*math/big.Float                         BigFloat
 //	github.com/shopspring/decimal.Decimal   BigDecimal
 //	*Object					object
-//	any other type				object from JSON produced by encoding.json/Unmarshall(arg)
+//	any other type				object from JSON produced by encoding.json/Marshall(arg)
 func (c *Context) CallFunction(js string, args ...any) (r any, err error) {
 	tls := c.runtime.tls
 	ctx := c.context
@@ -227,6 +228,29 @@ func (c *Context) CallFunction(js string, args ...any) (r any, err error) {
 	return c.call(f, g, args...)
 }
 
+func newInt32(n int32) (r lib.TJSValue) {
+	*(*int32)(unsafe.Pointer(&r)) = n
+	r.Ftag = lib.EJS_TAG_INT
+	return r
+}
+
+func newFloat(n float64) (r lib.TJSValue) {
+	*(*float64)(unsafe.Pointer(&r)) = n
+	r.Ftag = lib.EJS_TAG_FLOAT64
+	return r
+}
+
+func newBool(n bool) (r lib.TJSValue) {
+	switch {
+	case n:
+		*(*int32)(unsafe.Pointer(&r)) = 1
+	default:
+		*(*int32)(unsafe.Pointer(&r)) = 0
+	}
+	r.Ftag = lib.EJS_TAG_BOOL
+	return r
+}
+
 func (c *Context) call(f, this lib.TJSValue, args ...any) (r any, err error) {
 	tls := c.runtime.tls
 	ctx := c.context
@@ -241,6 +265,15 @@ func (c *Context) call(f, this lib.TJSValue, args ...any) (r any, err error) {
 			jsArgs = append(jsArgs, null)
 		case Undefined:
 			jsArgs = append(jsArgs, undefined)
+		case int:
+			switch {
+			case x >= math.MinInt32 && x <= math.MaxInt32:
+				jsArgs = append(jsArgs, newInt32(int32(x)))
+			default:
+				jsArgs = append(jsArgs, newFloat(float64(x)))
+			}
+		case bool:
+			jsArgs = append(jsArgs, newBool(x))
 		case string:
 			p, err := libc.CString(x)
 			if err != nil {
@@ -268,8 +301,31 @@ func (c *Context) call(f, this lib.TJSValue, args ...any) (r any, err error) {
 			defer lib.XFreeValue(tls, ctx, jv)
 
 			jsArgs = append(jsArgs, jv)
+		case decimal.Decimal:
+			s := x.String() + "m"
+			jv := c.eval(s, EvalGlobal)
+
+			defer lib.XFreeValue(tls, ctx, jv)
+
+			jsArgs = append(jsArgs, jv)
 		default:
-			panic(todo("%T", x))
+			b, err := json.Marshal(x)
+			if err != nil {
+				return nil, err
+			}
+
+			p, err := libc.CString(string(b))
+			if err != nil {
+				return nil, err
+			}
+
+			defer libc.Xfree(tls, p)
+
+			jv := lib.XJS_ParseJSON(tls, ctx, p, libc.Tsize_t(len(b)), uintptr(unsafe.Pointer(&evalFN)))
+
+			defer lib.XFreeValue(tls, ctx, jv)
+
+			jsArgs = append(jsArgs, jv)
 		}
 	}
 

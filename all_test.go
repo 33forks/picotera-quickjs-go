@@ -301,6 +301,11 @@ func testCall3(t *testing.T) {
 	ctx.AddIntrinsicBigFloat()
 	ctx.AddIntrinsicBigDecimal()
 
+	type T struct {
+		A int
+		B string
+	}
+
 	for _, test := range []struct {
 		js   string
 		args []any
@@ -309,9 +314,17 @@ func testCall3(t *testing.T) {
 		{`function f(a) { return a; }; f`, nil, Undefined{}},
 		{`function f(a) { return a; }; f`, []any{nil}, nil},
 		{`function f(a) { return a; }; f`, []any{Undefined{}}, Undefined{}},
+		{`function f(a) { return a; }; f`, []any{123}, 123},
+		{`function f(a) { return a; }; f`, []any{1234567890123}, 1.234567890123e+12},
+		{`function f(a) { return a; }; f`, []any{true}, true},
 		{`function f(a) { return a; }; f`, []any{"foo"}, "foo"},
 		{`function f(a) { return a; }; f`, []any{big.NewInt(42)}, 42},
 		{`function f(a) { return a; }; f`, []any{big.NewFloat(0.5)}, 0.5},
+		{`function f(a) { return a; }; f`, []any{decimal.NewFromInt(42)}, "42"},
+		{`function f(a, b, c, d) { return {a: a, b: b, c: c, d: d}; }; f`, []any{"aa", 11, "cc", 22}, `{"a":"aa","b":11,"c":"cc","d":22}`},
+		{`function f(a) { return a; }; f`, []any{T{11, "aa"}}, `{"A":11,"B":"aa"}`},
+		{`function f(a) { return a.A; }; f`, []any{T{11, "aa"}}, 11},
+		{`function f(a) { return a; }; f`, []any{&T{11, "aa"}}, `{"A":11,"B":"aa"}`},
 	} {
 		v, err := ctx.CallFunction(test.js, test.args...)
 		t.Logf("js=`%s`: v=%T(%[2]v) err=%T(%[3]v)", test.js, v, err)
@@ -336,14 +349,14 @@ func testCall3(t *testing.T) {
 			if g, e := x, big.NewFloat(float64(test.v.(float64))); g.Cmp(e) != 0 {
 				t.Errorf("got %v, expected %v", g, e)
 			}
-		// case decimal.Decimal:
-		// 	if g, e := x.String(), test.v; g != e {
-		// 		t.Errorf("got %v, expected %v", g, e)
-		// 	}
-		// case *Object:
-		// 	if g, e := x.json, test.v; g != e {
-		// 		t.Errorf("got %v, expected %v", g, e)
-		// 	}
+		case decimal.Decimal:
+			if g, e := x.String(), test.v; g != e {
+				t.Errorf("got %v, expected %v", g, e)
+			}
+		case *Object:
+			if g, e := x.json, test.v; g != e {
+				t.Errorf("got %v, expected %v", g, e)
+			}
 		default:
 			panic(todo("%T", x))
 		}

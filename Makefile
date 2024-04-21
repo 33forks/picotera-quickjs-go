@@ -46,3 +46,6 @@ cpu: clean
 mem: clean
 	go test -run @ -bench BenchmarkArewefastyet/ccgo -memprofile mem.out -memprofilerate 1 -timeout 24h
 	go tool pprof -lines -web -alloc_space *.test mem.out
+
+leak:
+	go test -v -run TestMemgrind2 -tags=libc.memgrind 2>&1 | tee log-memgrind
