@@ -95,8 +95,7 @@ func (r *Runtime) Close() error {
 
 // Context represents a Javascript context (or Realm). Each Context has its
 // own global objects and system objects. There can be several Contexts per
-// Runtime and they can share objects, similar to frames of the same origin
-// sharing Javascript objects in a web browser.
+// Runtime.
 //
 // Note: Context is not safe for concurrent use by multiple goroutines.
 type Context struct {
