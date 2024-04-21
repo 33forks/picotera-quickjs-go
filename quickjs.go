@@ -22,7 +22,7 @@
 //
 // https://modern-c.appspot.com/-/builder/?importpath=modernc.org%2fquickjs
 //
-// # Preliminary performance results
+// # Performance
 //
 // This package vs https://pkg.go.dev/github.com/dop251/goja
 //
