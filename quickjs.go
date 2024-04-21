@@ -198,7 +198,8 @@ func (c *Context) globalObject() lib.TJSValue {
 //	nil                                     null
 //	Undefined                               undefined
 //	string                                  string
-//	int                                     int
+//	int (int32 compatible)                  int
+//	int (not int32 compatible)              float
 //	bool                                    bool
 //	float64                                 float64
 //	*math/big.Int                           BigInt
