@@ -31,6 +31,7 @@ func TestMain(m *testing.M) {
 func TestEval(t *testing.T) {
 	t.Run("eval1", testEval1)
 	t.Run("eval2", testEval2)
+	t.Run("eval3", testEval3)
 }
 
 func testEval1(t *testing.T) {
@@ -130,6 +131,48 @@ func testEval2(t *testing.T) {
 		if g, e := fmt.Sprint(v), test.sv; g != e {
 			t.Errorf("FAIL %v: %T(%[1]v) %T(%[2]v)", test.js, g, e)
 			continue
+		}
+	}
+}
+
+func testEval3(t *testing.T) {
+	rt, err := NewRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer rt.Free()
+
+	ctx, err := rt.NewContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer ctx.Free()
+
+	for _, test := range []struct {
+		js string
+		v  string
+	}{
+		{`a = {}; a;`, `{}`},
+		{`a = {foo: 'bar', baz: "qux", i: 42}; a;`, `{"foo":"bar","baz":"qux","i":42}`},
+		{`a = []; a;`, `[]`},
+		{`a = [1, 2, 3]; a;`, `[1,2,3]`},
+	} {
+		v, err := ctx.Eval(test.js, EvalGlobal)
+		t.Logf("js=`%s`: v=%T(%[2]v) err=%T(%[3]v)", test.js, v, err)
+		if err != nil {
+			t.Errorf("FAIL js=`%s`: err=%v", test.js, err)
+			continue
+		}
+
+		switch x := v.(type) {
+		case *Object:
+			if g, e := string(x.json), test.v; g != e {
+				t.Errorf("got=`%s` expected=`%s`", g, e)
+			}
+		default:
+			t.Errorf("unexpected result type: %T", x)
 		}
 	}
 }

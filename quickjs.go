@@ -2,10 +2,10 @@
 // Use of the source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package quickjs is a CGo-free wrapper of quickjs, a library implementing an
-// embeddable Javascript engine.
+// Package quickjs is an idiomatic Go wrapper for [modernc.org/libquickjs], an
+// embeddable, CGo-free Javascript engine.
 //
-// See also https://bellard.org/quickjs/
+// See also the original [C quickjs] library.
 //
 // # Supported platforms and architectures
 //
@@ -39,9 +39,13 @@
 //
 // Parts of the documentation were copied from the quickjs documentation, see
 // LICENSE-QUICKJS for details.
+//
+// [C quickjs]: https://bellard.org/quickjs
+// [modernc.org/libquickjs]: https://pkg.go.dev/modernc.org/libquickjs
 package quickjs // import "modernc.org/quickjs"
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"unsafe"
@@ -49,6 +53,13 @@ import (
 	"github.com/shopspring/decimal"
 	"modernc.org/libc"
 	lib "modernc.org/libquickjs"
+)
+
+var (
+	_ json.Marshaler = (*Object)(nil)
+
+	null      = lib.TJSValue{Ftag: lib.EJS_TAG_NULL}
+	undefined = lib.TJSValue{Ftag: lib.EJS_TAG_UNDEFINED}
 )
 
 // Runtime represents a Javascript runtime corresponding to an object heap.
@@ -147,8 +158,9 @@ var evalFN = [...]byte{'<', 'e', 'v', 'a', 'l', '>', 0}
 //	BigInt          *math/big.Int                           nil
 //	BigFloat        *math/big.Float                         nil
 //	BigDecimal      github.com/shopspring/decimal.Decimal   nil
+//	object          *Object                                 nil
 //	any other type  Unsupported                             nil
-func (c *Context) Eval(js string, flags int) (any, error) {
+func (c *Context) Eval(js string, flags int) (r any, err error) {
 	tls := c.runtime.tls
 	ps, err := libc.CString(js)
 	if err != nil {
@@ -158,6 +170,28 @@ func (c *Context) Eval(js string, flags int) (any, error) {
 	defer libc.Xfree(tls, ps)
 
 	return c.value(lib.XJS_Eval(tls, c.context, ps, libc.Tsize_t(len(js)), uintptr(unsafe.Pointer(&evalFN)), int32(flags)))
+}
+
+// Object represents a Javascript object.
+type Object struct {
+	json string
+}
+
+// MarshalJSON implements encoding/json.Marshaler.
+func (o *Object) MarshalJSON() (r []byte, err error) {
+	return []byte(o.json), nil
+}
+
+func (c *Context) newObject(v lib.TJSValue) *Object {
+	json := lib.XJS_JSONStringify(c.runtime.tls, c.context, v, undefined, undefined)
+
+	defer lib.XFreeValue(c.runtime.tls, c.context, json)
+
+	p := lib.XToCString(c.runtime.tls, c.context, json)
+
+	defer lib.XJS_FreeCString(c.runtime.tls, c.context, p)
+
+	return &Object{json: libc.GoString(p)}
 }
 
 // Unsupported represents an unsupported javascript value.
@@ -173,7 +207,7 @@ var (
 
 // value "unpacks" 'v'. FreeValue(v) is called before returning, 'v' must not
 // be used afterwards.
-func (c *Context) value(v lib.TJSValue) (any, error) {
+func (c *Context) value(v lib.TJSValue) (r any, err error) {
 	if v.Ftag < 0 {
 		// all tags with a reference count are negative
 		defer lib.XFreeValue(c.runtime.tls, c.context, v)
@@ -256,6 +290,8 @@ func (c *Context) value(v lib.TJSValue) (any, error) {
 		defer lib.XJS_FreeCString(c.runtime.tls, c.context, p)
 
 		return libc.GoString(p), nil
+	case lib.EJS_TAG_OBJECT: // -1
+		return c.newObject(v), nil
 	case lib.EJS_TAG_INT: //  0,
 		return int(*(*int32)(unsafe.Pointer(&v))), nil
 	case lib.EJS_TAG_BOOL: //  1,
