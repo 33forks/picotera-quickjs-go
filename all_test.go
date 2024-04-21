@@ -205,7 +205,7 @@ func testCall1(t *testing.T) {
 		{`var a = 42; a;`},
 		{`var a = { }; a;`},
 	} {
-		v, err := ctx.CallFunction(test.js)
+		v, err := ctx.Call(test.js)
 		t.Logf("js=`%s`: v=%T(%[2]v) err=%T(%[3]v)", test.js, v, err)
 		if err == nil {
 			t.Errorf("FAIL js=`%s`: expected non nil err", test.js)
@@ -246,7 +246,7 @@ func testCall2(t *testing.T) {
 		{`function f() { return 12.34m; }; f`, "12.34"},
 		{`function f() { return {1:2,3:4}; }; f`, `{"1":2,"3":4}`},
 	} {
-		v, err := ctx.CallFunction(test.js)
+		v, err := ctx.Call(test.js)
 		t.Logf("js=`%s`: v=%T(%[2]v) err=%T(%[3]v)", test.js, v, err)
 		if err != nil {
 			t.Errorf("FAIL js=`%s`: err=%v", test.js, err)
@@ -325,8 +325,9 @@ func testCall3(t *testing.T) {
 		{`function f(a) { return a; }; f`, []any{T{11, "aa"}}, `{"A":11,"B":"aa"}`},
 		{`function f(a) { return a.A; }; f`, []any{T{11, "aa"}}, 11},
 		{`function f(a) { return a; }; f`, []any{&T{11, "aa"}}, `{"A":11,"B":"aa"}`},
+		{`var obj={"a":42, foo() { return obj.a; }}; obj.foo`, nil, 42},
 	} {
-		v, err := ctx.CallFunction(test.js, test.args...)
+		v, err := ctx.Call(test.js, test.args...)
 		t.Logf("js=`%s`: v=%T(%[2]v) err=%T(%[3]v)", test.js, v, err)
 		if err != nil {
 			t.Errorf("FAIL js=`%s`: err=%v", test.js, err)

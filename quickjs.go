@@ -161,16 +161,16 @@ var evalFN = [...]byte{'<', 'e', 'v', 'a', 'l', '>', 0}
 //	BigDecimal              github.com/shopspring/decimal.Decimal   nil
 //	object                  *Object                                 nil
 //	any other type          Unsupported                             nil
-func (c *Context) Eval(js string, flags int) (r any, err error) {
+func (c *Context) Eval(javascript string, flags int) (r any, err error) {
 	tls := c.runtime.tls
-	ps, err := libc.CString(js)
+	ps, err := libc.CString(javascript)
 	if err != nil {
 		panic(err)
 	}
 
 	defer libc.Xfree(tls, ps)
 
-	return c.value(lib.XJS_Eval(tls, c.context, ps, libc.Tsize_t(len(js)), uintptr(unsafe.Pointer(&evalFN)), int32(flags)))
+	return c.value(lib.XJS_Eval(tls, c.context, ps, libc.Tsize_t(len(javascript)), uintptr(unsafe.Pointer(&evalFN)), int32(flags)))
 }
 
 func (c *Context) eval(js string, flags int) lib.TJSValue {
@@ -190,7 +190,7 @@ func (c *Context) globalObject() lib.TJSValue {
 	return lib.XJS_GetGlobalObject(c.runtime.tls, c.context)
 }
 
-// CallFunction evaluates 'js(args)' and returns the resulting (value, error).
+// Call evaluates 'function(args...)' and returns the resulting (value, error).
 //
 // Argument types must be one of:
 //
@@ -207,17 +207,17 @@ func (c *Context) globalObject() lib.TJSValue {
 //	github.com/shopspring/decimal.Decimal   BigDecimal
 //	*Object					object
 //	any other type				object from JSON produced by encoding.json/Marshall(arg)
-func (c *Context) CallFunction(js string, args ...any) (r any, err error) {
+func (c *Context) Call(function string, args ...any) (r any, err error) {
 	tls := c.runtime.tls
 	ctx := c.context
-	ps, err := libc.CString(js)
+	ps, err := libc.CString(function)
 	if err != nil {
 		panic(err)
 	}
 
 	defer libc.Xfree(tls, ps)
 
-	f := lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(js)), uintptr(unsafe.Pointer(&evalFN)), int32(EvalGlobal))
+	f := lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(function)), uintptr(unsafe.Pointer(&evalFN)), int32(EvalGlobal))
 
 	defer lib.XFreeValue(tls, ctx, f)
 
@@ -345,11 +345,9 @@ func (c *Context) call(f, this lib.TJSValue, args ...any) (r any, err error) {
 }
 
 // Object represents the value of a Javascript object.
-//
-// Different Object instances derived from the same Javascript object may or
-// may not compare equal.
 type Object struct {
-	json string
+	json               string
+	forceNonComparable []byte
 }
 
 // MarshalJSON implements encoding/json.Marshaler.
