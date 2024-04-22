@@ -13,8 +13,8 @@
 //
 //	OS      Arch
 //	-------------
-//	linux	amd64
-//	linux	loong64
+//	linux   amd64
+//	linux   loong64
 //
 // # Builders
 //
@@ -30,10 +30,10 @@
 //	goarch: amd64
 //	pkg: modernc.org/quickjs
 //	cpu: AMD Ryzen 9 3900X 12-Core Processor
-//	BenchmarkArewefastyet/ccgo-24   1       109049381989 ns/op            22456 B/op                47 allocs/op
-//	BenchmarkArewefastyet/goja-24   1       189426235514 ns/op      28172865888 B/op        1765994482 allocs/op
+//	BenchmarkArewefastyet/ccgo-24    1    114833264962 ns/op          22808 B/op            70 allocs/op
+//	BenchmarkArewefastyet/goja-24    1    188090359173 ns/op    28283063392 B/op    1771005768 allocs/op
 //	PASS
-//	ok  	modernc.org/quickjs	298.488s
+//	ok  modernc.org/quickjs 302.936s
 //
 // # Notes
 //
@@ -71,6 +71,38 @@ var (
 	goFuncsMu sync.Mutex
 	goFuncs   = map[int32]*goFunc{}
 )
+
+// VM represents a single Context Runtime. It has all Context methods promoted.
+type VM struct {
+	*Context
+}
+
+// NewVM returns a newly created VM.
+func NewVM() (*VM, error) {
+	r, err := NewRuntime()
+	if err != nil {
+		return nil, err
+	}
+
+	c, err := r.NewContext()
+	if err != nil {
+		r.Close()
+		return nil, err
+	}
+
+	return &VM{Context: c}, nil
+}
+
+// Close releases the resources held by 'm'.
+func (m *VM) Close() (err error) {
+	r := m.runtime
+
+	if err = m.Context.Close(); err != nil {
+		return err
+	}
+
+	return r.Close()
+}
 
 // Runtime represents a Javascript runtime corresponding to an object heap.
 //
@@ -612,12 +644,19 @@ func mustCString(s string) uintptr {
 }
 
 type goFunc struct {
-	ctx   *Context
-	cname uintptr
-	f     reflect.Value
-	in    []reflect.Type
-	out   []reflect.Type
-	tab   uintptr
+	cname        uintptr
+	ctx          *Context
+	f            reflect.Value
+	in           []reflect.Type
+	name         string
+	out          []reflect.Type
+	tab          uintptr
+	variadicType reflect.Type
+
+	minArgs int
+	maxArgs int
+
+	wantThis bool
 }
 
 // RegisterFunc registers a Go function 'f' and makes it callable from
@@ -627,29 +666,16 @@ type goFunc struct {
 // values, the second one must be of type error. In such case a non-nil
 // returned error is translated to a Javascript exception.
 //
-// The function can have zero or more parameters. If it has non-zero number of
-// parameters then the first one receives the Javascript value of 'this'.
-// Depending on context, 'this' can be nil.
+// The function can have zero or more parameters. If 'wantThis' is true then
+// the first parameter of the Go function will get the Javascript value of
+// 'this'.  Depending on context, 'this' can be nil.
 //
 // Any Go -> Javascript or Javascript -> Go type conversion between arguments
 // and return values that fails throws a Javascript exception.
 //
-// Javascript code must call registered Go functions with the exact number of
-// arguments of the Go function, minus one, because of the 'this' argument.
-// Otherwise a Javascript exception is raised.
-//
-//	Go parameters   Javascipt arguments required
-//	--------------------------------------------
-//	0		0
-//	1		0 // Go func 'this' is used as the first argument in calling the Go func
-//	2		1
-//	3		2
-//	...
-//
-// The successfully registered Go function should be eventually unregistered to
-// avoid resource leaks.  However, registering Go functions for the lifetime of
-// a process should be fine, no unregistering is necessary in that case.
-func (c *Context) RegisterFunc(name string, f any) (err error) {
+// If the Javascript arguments cannot be converted to Go types then a
+// Javascript exception is raised.
+func (c *Context) RegisterFunc(name string, f any, wantThis bool) (err error) {
 	if name == "" {
 		return fmt.Errorf("func name cannot be empty")
 	}
@@ -667,7 +693,11 @@ func (c *Context) RegisterFunc(name string, f any) (err error) {
 	}
 
 	switch typ.NumOut() {
-	case 0, 1:
+	case 0:
+		if wantThis {
+			return fmt.Errorf("'wantThis' is true but 'f' has zero parameters")
+		}
+	case 1:
 		// ok
 	case 2:
 		// Second return value must be error
@@ -678,9 +708,25 @@ func (c *Context) RegisterFunc(name string, f any) (err error) {
 		return fmt.Errorf("%s has more than two return values", name)
 	}
 
+	minArgs := typ.NumIn()
+	if wantThis {
+		minArgs++
+	}
+	maxArgs := minArgs
+	var vt reflect.Type
+	if typ.IsVariadic() {
+		maxArgs = -1
+		sliceT := typ.In(typ.NumIn() - 1)
+		vt = sliceT.Elem()
+	}
 	info := &goFunc{
-		ctx: c,
-		f:   val,
+		ctx:          c,
+		f:            val,
+		maxArgs:      maxArgs,
+		minArgs:      minArgs,
+		name:         name,
+		variadicType: vt,
+		wantThis:     wantThis,
 	}
 	for i := 0; i < typ.NumIn(); i++ {
 		info.in = append(info.in, typ.In(i))
@@ -741,27 +787,21 @@ func call(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uintpt
 		return throwInternalError(tls, ctx, "callback id=%i not registered", magic)
 	}
 
-	//	len(info.in)	argc
-	//	0		0
-	//	1		0
-	//	2		1
-	//	3		2
-
 	c := info.ctx
-	want := len(info.in) - 1
-	if want < 0 {
-		want = 0
+	if int(argc) < info.minArgs {
+		return throwTypeError(tls, ctx, fmt.Sprintf("not enough arguments in call to %s", info.name))
 	}
-	if int(argc) != want {
-		return throwTypeError(tls, ctx, fmt.Sprintf("callback id=%v: argument count mismatch: got this+%v, want %v", magic, argc, want))
+
+	if info.maxArgs >= 0 && int(argc) > info.maxArgs {
+		return throwTypeError(tls, ctx, fmt.Sprintf("too many arguments in call to %s", info.name))
 	}
 
 	var err error
 	var in []reflect.Value
 	for i, typ := range info.in {
 		var v lib.TJSValue
-		switch i {
-		case 0:
+		switch {
+		case info.wantThis && i == 0:
 			_ = typ
 			_ = v
 			panic(todo(""))
@@ -776,7 +816,7 @@ func call(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uintpt
 		_ = out
 		panic(todo(""))
 	case 1:
-		if r, err = c.goToJs(out[0]); err != nil {
+		if r, err = c.jsValue(out[0]); err != nil {
 			return throwTypeError(tls, ctx, fmt.Sprintf("callback id=%v: %v", magic, err))
 		}
 	default:
@@ -785,7 +825,7 @@ func call(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uintpt
 	return r
 }
 
-func (c *Context) goToJs(in reflect.Value) (out lib.TJSValue, err error) {
+func (c *Context) jsValue(in reflect.Value) (out lib.TJSValue, err error) {
 	switch in.Kind() {
 	case reflect.Interface:
 		switch in.Interface().(type) {
@@ -819,7 +859,7 @@ func (c *Context) goToJs(in reflect.Value) (out lib.TJSValue, err error) {
 				return out, fmt.Errorf("type not supported: %s", ev.Type())
 			}
 
-			return c.goToJs(ev)
+			return c.jsValue(ev)
 		}
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return jsInt(in.Int()), nil

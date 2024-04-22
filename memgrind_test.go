@@ -40,22 +40,15 @@ func TestMemgrind(t *testing.T) {
 		}
 		src = append(src, runArewefastyet)
 
-		rt, err := NewRuntime()
+		m, err := NewVM()
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		defer rt.Close()
-
-		ctx, err := rt.NewContext()
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		defer ctx.Close()
+		defer m.Close()
 
 		for _, v := range src {
-			if _, err := ctx.Eval(v, EvalGlobal); err != nil {
+			if _, err := m.Eval(v, EvalGlobal); err != nil {
 				t.Fatal(err)
 			}
 		}

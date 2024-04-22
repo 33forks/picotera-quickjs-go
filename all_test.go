@@ -38,19 +38,12 @@ func TestEval(t *testing.T) {
 }
 
 func testEval1(t *testing.T) {
-	rt, err := NewRuntime()
+	m, err := NewVM()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer rt.Close()
-
-	ctx, err := rt.NewContext()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer ctx.Close()
+	defer m.Close()
 
 	for _, test := range []struct {
 		js string
@@ -63,7 +56,7 @@ func testEval1(t *testing.T) {
 		{"undefined;", Undefined{}},
 		{"throw new Error('FAIL')", fmt.Errorf("Error: FAIL")},
 	} {
-		v, err := ctx.Eval(test.js, EvalGlobal)
+		v, err := m.Eval(test.js, EvalGlobal)
 		t.Logf("%s: %T(%[1]v) %v", test.js, v, err)
 		if err != nil {
 			switch x := test.v.(type) {
@@ -86,22 +79,15 @@ func testEval1(t *testing.T) {
 }
 
 func testEval2(t *testing.T) {
-	rt, err := NewRuntime()
+	m, err := NewVM()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer rt.Close()
+	defer m.Close()
 
-	ctx, err := rt.NewContext()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer ctx.Close()
-
-	ctx.AddIntrinsicBigFloat()
-	ctx.AddIntrinsicBigDecimal()
+	m.AddIntrinsicBigFloat()
+	m.AddIntrinsicBigDecimal()
 
 	for _, test := range []struct {
 		js string
@@ -119,7 +105,7 @@ func testEval2(t *testing.T) {
 		{"1234567890.123456789m", newBigDecimal(t, "1234567890.123456789"), "1234567890.123456789"},
 		{"-1234567890.123456789m", newBigDecimal(t, "-1234567890.123456789"), "-1234567890.123456789"},
 	} {
-		v, err := ctx.Eval(test.js, EvalGlobal)
+		v, err := m.Eval(test.js, EvalGlobal)
 		t.Logf("%s: %T(%[1]v) %v", test.js, v, err)
 		if err != nil {
 			t.Errorf("FAIL %s: %v", test.js, err)
@@ -139,19 +125,12 @@ func testEval2(t *testing.T) {
 }
 
 func testEval3(t *testing.T) {
-	rt, err := NewRuntime()
+	m, err := NewVM()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer rt.Close()
-
-	ctx, err := rt.NewContext()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer ctx.Close()
+	defer m.Close()
 
 	for _, test := range []struct {
 		js string
@@ -162,7 +141,7 @@ func testEval3(t *testing.T) {
 		{`a = []; a;`, `[]`},
 		{`a = [1, 2, 3]; a;`, `[1,2,3]`},
 	} {
-		v, err := ctx.Eval(test.js, EvalGlobal)
+		v, err := m.Eval(test.js, EvalGlobal)
 		t.Logf("js=`%s`: v=%T(%[2]v) err=%T(%[3]v)", test.js, v, err)
 		if err != nil {
 			t.Errorf("FAIL js=`%s`: err=%v", test.js, err)
@@ -187,19 +166,12 @@ func TestCall0(t *testing.T) {
 }
 
 func testCall1(t *testing.T) {
-	rt, err := NewRuntime()
+	m, err := NewVM()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer rt.Close()
-
-	ctx, err := rt.NewContext()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer ctx.Close()
+	defer m.Close()
 
 	for _, test := range []struct {
 		js string
@@ -208,7 +180,7 @@ func testCall1(t *testing.T) {
 		{`var a = 42; a;`},
 		{`var a = { }; a;`},
 	} {
-		v, err := ctx.Call(test.js)
+		v, err := m.Call(test.js)
 		t.Logf("js=`%s`: v=%T(%[2]v) err=%T(%[3]v)", test.js, v, err)
 		if err == nil {
 			t.Errorf("FAIL js=`%s`: expected non nil err", test.js)
@@ -217,22 +189,15 @@ func testCall1(t *testing.T) {
 }
 
 func testCall2(t *testing.T) {
-	rt, err := NewRuntime()
+	m, err := NewVM()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer rt.Close()
+	defer m.Close()
 
-	ctx, err := rt.NewContext()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer ctx.Close()
-
-	ctx.AddIntrinsicBigFloat()
-	ctx.AddIntrinsicBigDecimal()
+	m.AddIntrinsicBigFloat()
+	m.AddIntrinsicBigDecimal()
 
 	for _, test := range []struct {
 		js string
@@ -249,7 +214,7 @@ func testCall2(t *testing.T) {
 		{`function f() { return 12.34m; }; f`, "12.34"},
 		{`function f() { return {1:2,3:4}; }; f`, `{"1":2,"3":4}`},
 	} {
-		v, err := ctx.Call(test.js)
+		v, err := m.Call(test.js)
 		t.Logf("js=`%s`: v=%T(%[2]v) err=%T(%[3]v)", test.js, v, err)
 		if err != nil {
 			t.Errorf("FAIL js=`%s`: err=%v", test.js, err)
@@ -287,22 +252,15 @@ func testCall2(t *testing.T) {
 }
 
 func testCall3(t *testing.T) {
-	rt, err := NewRuntime()
+	m, err := NewVM()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer rt.Close()
+	defer m.Close()
 
-	ctx, err := rt.NewContext()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer ctx.Close()
-
-	ctx.AddIntrinsicBigFloat()
-	ctx.AddIntrinsicBigDecimal()
+	m.AddIntrinsicBigFloat()
+	m.AddIntrinsicBigDecimal()
 
 	type T struct {
 		A int
@@ -330,7 +288,7 @@ func testCall3(t *testing.T) {
 		{`function f(a) { return a; }; f`, []any{&T{11, "aa"}}, `{"A":11,"B":"aa"}`},
 		{`var obj={"a":42, foo() { return obj.a; }}; obj.foo`, nil, 42},
 	} {
-		v, err := ctx.Call(test.js, test.args...)
+		v, err := m.Call(test.js, test.args...)
 		t.Logf("js=`%s`: v=%T(%[2]v) err=%T(%[3]v)", test.js, v, err)
 		if err != nil {
 			t.Errorf("FAIL js=`%s`: err=%v", test.js, err)
@@ -413,21 +371,14 @@ func TestFib(t *testing.T) {
 }
 
 func testFibCCGo(t *testing.T) {
-	rt, err := NewRuntime()
+	m, err := NewVM()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer rt.Close()
+	defer m.Close()
 
-	ctx, err := rt.NewContext()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer ctx.Close()
-
-	v, err := ctx.Eval(fib, EvalGlobal)
+	v, err := m.Eval(fib, EvalGlobal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -488,25 +439,18 @@ var arewefastyetJS = []string{
 }
 
 func benchmarkArewefastyetCCGo(b *testing.B, src []string) {
-	rt, err := NewRuntime()
+	m, err := NewVM()
 	if err != nil {
 		b.Fatal(err)
 	}
 
-	defer rt.Close()
-
-	ctx, err := rt.NewContext()
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	defer ctx.Close()
+	defer m.Close()
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for _, v := range src {
-			if _, err = ctx.Eval(v, EvalGlobal); err != nil {
+			if _, err = m.Eval(v, EvalGlobal); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -544,66 +488,57 @@ func TestRegisterGoFunc(t *testing.T) {
 }
 
 func testRegisterGoFuncMustFail(t *testing.T) {
-	rt, err := NewRuntime()
+	m, err := NewVM()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer rt.Close()
+	defer m.Close()
 
-	ctx, err := rt.NewContext()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer ctx.Close()
-
-	for _, v := range []any{
-		42,                              // Not a function
-		func() (a, b, c int) { return }, // Too many return values
-		func() (a, b int) { return },    // Two return values but the second is not error
+	for _, test := range []struct {
+		wantThis bool
+		f        any
+	}{
+		{false, 42},                              // Not a function
+		{false, func() (a, b, c int) { return }}, // Too many return values
+		{false, func() (a, b int) { return }},    // Two return values but the second is not error
+		{true, func() {}},                        // Wants this but no params
 	} {
-		switch err := ctx.RegisterFunc("myfunc", v); {
+		switch err := m.RegisterFunc("myfunc", test.f, test.wantThis); {
 		case err != nil:
-			t.Logf("registering function '%T(%[1]v)' failed as expected: err=%v", v, err)
+			t.Logf("registering function '%T(%[1]v)' failed as expected: err=%v", test, err)
 		default:
-			t.Errorf("registering function '%T(%[1]v)' should failed", v)
+			t.Errorf("registering function '%T(%[1]v)' should failed", test)
 		}
 	}
 }
 
 func testRegisterGoFuncOK(t *testing.T) {
-	rt, err := NewRuntime()
+	m, err := NewVM()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer rt.Close()
-
-	ctx, err := rt.NewContext()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer ctx.Close()
+	defer m.Close()
 
 	for _, test := range []struct {
-		nm   string
-		f    any
-		args []any
-		call string
-		v    any
+		nm       string
+		wantThis bool
+		f        any
+		args     []any
+		call     string
+		v        any
 	}{
-		{"f1", func() {}, nil, "", Undefined{}},
-		{"f2", func() any { return nil }, nil, "", nil},
-		{"f3", func() *int { return nil }, nil, "", nil},
-		{"f5", func() *int { return nil }, nil, "", nil},
-		{"f6", func() *int { i := 42; return &i }, nil, "", 42},
-		{"f7", func() float64 { return 0.5 }, nil, "", 0.5},
-		{"f8", func() float32 { return 2.5 }, nil, "", 2.5},
-		{"f9", func() string { return "2.5" }, nil, "", "2.5"},
+		{"f1", false, func() {}, nil, "", Undefined{}},
+		{"f2", false, func() any { return nil }, nil, "", nil},
+		{"f3", false, func() *int { return nil }, nil, "", nil},
+		{"f5", false, func() *int { return nil }, nil, "", nil},
+		{"f6", false, func() *int { i := 42; return &i }, nil, "", 42},
+		{"f7", false, func() float64 { return 0.5 }, nil, "", 0.5},
+		{"f8", false, func() float32 { return 2.5 }, nil, "", 2.5},
+		{"f9", false, func() string { return "2.5" }, nil, "", "2.5"},
 	} {
-		if err := ctx.RegisterFunc(test.nm, test.f); err != nil {
+		if err := m.RegisterFunc(test.nm, test.f, test.wantThis); err != nil {
 			t.Errorf("registering function '%T(%[1]v)': %v", test, err)
 			continue
 		}
@@ -612,7 +547,7 @@ func testRegisterGoFuncOK(t *testing.T) {
 		if call == "" {
 			call = fmt.Sprintf("%s();", test.nm)
 		}
-		rv, err := ctx.Eval(call, EvalGlobal)
+		rv, err := m.Eval(call, EvalGlobal)
 		trc("%s: %T(%[2]v)", call, rv)
 		if err != nil {
 			t.Errorf("calling %s: err=%v", test.nm, err)

@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
 
-.PHONY:	all clean dev download edit editor work test cpu mem short-test bench
+.PHONY:	all clean dev download edit editor work test cpu mem short-test bench cover
 
 all: editor
 	golint 2>&1
@@ -49,3 +49,8 @@ mem: clean
 
 leak:
 	go test -v -run TestMemgrind2 -tags=libc.memgrind 2>&1 | tee log-memgrind
+
+cover:
+	cover=$(shell mktemp) ; \
+	      go test -v -short -coverprofile=$$cover ; \
+	      go tool cover -html=$$cover
