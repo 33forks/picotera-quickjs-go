@@ -104,7 +104,7 @@ func (m *VM) Close() (err error) {
 	return r.Close()
 }
 
-// Runtime represents a Javascript runtime corresponding to an object heap.
+// Runtime represents a Javascript runtime.
 //
 // Note: Runtime is not safe for concurrent use by multiple goroutines.
 type Runtime struct {
@@ -672,9 +672,6 @@ type goFunc struct {
 //
 // Any Go -> Javascript or Javascript -> Go type conversion between arguments
 // and return values that fails throws a Javascript exception.
-//
-// If the Javascript arguments cannot be converted to Go types then a
-// Javascript exception is raised.
 func (c *Context) RegisterFunc(name string, f any, wantThis bool) (err error) {
 	if name == "" {
 		return fmt.Errorf("func name cannot be empty")
