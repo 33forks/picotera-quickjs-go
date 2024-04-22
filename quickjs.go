@@ -196,8 +196,8 @@ func (c *Context) globalObject() lib.TJSValue {
 //	nil                                     null
 //	Undefined                               undefined
 //	string                                  string
-//	int (int32 compatible)                  int
-//	int (not int32 compatible)              float
+//	int*/uint* (in int32 range)             int
+//	int*/uint* (not in int32 range          float
 //	bool                                    bool
 //	float64                                 float64
 //	*math/big.Int                           BigInt
@@ -263,9 +263,47 @@ func (c *Context) call(f, this lib.TJSValue, args ...any) (r any, err error) {
 			jsArgs = append(jsArgs, null)
 		case Undefined:
 			jsArgs = append(jsArgs, undefined)
+		case int8:
+			jsArgs = append(jsArgs, newInt32(int32(x)))
+		case uint8:
+			jsArgs = append(jsArgs, newInt32(int32(x)))
+		case int16:
+			jsArgs = append(jsArgs, newInt32(int32(x)))
+		case uint16:
+			jsArgs = append(jsArgs, newInt32(int32(x)))
+		case int32:
+			jsArgs = append(jsArgs, newInt32(int32(x)))
+		case uint32:
+			switch {
+			case x <= math.MaxInt32:
+				jsArgs = append(jsArgs, newInt32(int32(x)))
+			default:
+				jsArgs = append(jsArgs, newFloat(float64(x)))
+			}
 		case int:
 			switch {
 			case x >= math.MinInt32 && x <= math.MaxInt32:
+				jsArgs = append(jsArgs, newInt32(int32(x)))
+			default:
+				jsArgs = append(jsArgs, newFloat(float64(x)))
+			}
+		case uint:
+			switch {
+			case x <= math.MaxInt32:
+				jsArgs = append(jsArgs, newInt32(int32(x)))
+			default:
+				jsArgs = append(jsArgs, newFloat(float64(x)))
+			}
+		case int64:
+			switch {
+			case x >= math.MinInt32 && x <= math.MaxInt32:
+				jsArgs = append(jsArgs, newInt32(int32(x)))
+			default:
+				jsArgs = append(jsArgs, newFloat(float64(x)))
+			}
+		case uint64:
+			switch {
+			case x <= math.MaxInt32:
 				jsArgs = append(jsArgs, newInt32(int32(x)))
 			default:
 				jsArgs = append(jsArgs, newFloat(float64(x)))

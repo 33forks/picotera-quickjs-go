@@ -462,18 +462,6 @@ func BenchmarkArewefastyet(b *testing.B) {
 		b.Run("goja", func(b *testing.B) { benchmarkArewefastyetGoja(b, src) })
 		return nil
 	})
-	// 202403271432
-	// jnml@e5-1650:~/src/modernc.org/quickjs$ make bench
-	// go test -run @ -bench .
-	// goos: linux
-	// goarch: amd64
-	// pkg: modernc.org/quickjs
-	// cpu: Intel(R) Xeon(R) CPU E5-1650 v2 @ 3.50GHz
-	// BenchmarkArewefastyet/ccgo-12         	       1	149414713712 ns/op	      22496 B/op	        52 allocs/op
-	// BenchmarkArewefastyet/goja-12         	       1	259292254549 ns/op	27425119432 B/op	1733858709 allocs/op
-	// PASS
-	// ok  	modernc.org/quickjs	408.723s
-	// jnml@e5-1650:~/src/modernc.org/quickjs$
 }
 
 const runArewefastyet = `
