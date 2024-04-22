@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"testing"
 
 	"github.com/dop251/goja"
@@ -23,6 +24,8 @@ var (
 
 	memgrind bool
 )
+
+func stack() []byte { return debug.Stack() }
 
 func TestMain(m *testing.M) {
 	os.Exit(m.Run())
@@ -531,6 +534,118 @@ func TestMem(t *testing.T) {
 	if !memgrind {
 		if _, err := util.Shell(nil, "go", "test", fmt.Sprintf("-short=%v", testing.Short()), "-v", "-tags", "libc.memgrind", "-timeout", "12h", "-run", "TestMemgrind"); err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+func TestRegisterGoFunc(t *testing.T) {
+	t.Run("fnFail", testRegisterGoFuncMustFail)
+	t.Run("fnOK", testRegisterGoFuncOK)
+}
+
+func testRegisterGoFuncMustFail(t *testing.T) {
+	rt, err := NewRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer rt.Close()
+
+	ctx, err := rt.NewContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer ctx.Close()
+
+	for _, v := range []any{
+		42,                              // Not a function
+		func() (a, b, c int) { return }, // Too many return values
+		func() (a, b int) { return },    // Two return values but the second is not error
+	} {
+		switch err := ctx.RegisterFunc("myfunc", v); {
+		case err != nil:
+			t.Logf("registering function '%T(%[1]v)' failed as expected: err=%v", v, err)
+		default:
+			t.Errorf("registering function '%T(%[1]v)' should failed", v)
+		}
+	}
+}
+
+func testRegisterGoFuncOK(t *testing.T) {
+	rt, err := NewRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer rt.Close()
+
+	ctx, err := rt.NewContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer ctx.Close()
+
+	for _, test := range []struct {
+		nm   string
+		f    any
+		args []any
+		call string
+		v    any
+	}{
+		{"f1", func() {}, nil, "", Undefined{}},
+		{"f2", func() any { return nil }, nil, "", nil},
+		{"f3", func() *int { return nil }, nil, "", nil},
+		{"f5", func() *int { return nil }, nil, "", nil},
+		{"f6", func() *int { i := 42; return &i }, nil, "", 42},
+		{"f7", func() float64 { return 0.5 }, nil, "", 0.5},
+		{"f8", func() float32 { return 2.5 }, nil, "", 2.5},
+		{"f9", func() string { return "2.5" }, nil, "", "2.5"},
+	} {
+		if err := ctx.RegisterFunc(test.nm, test.f); err != nil {
+			t.Errorf("registering function '%T(%[1]v)': %v", test, err)
+			continue
+		}
+
+		call := test.call
+		if call == "" {
+			call = fmt.Sprintf("%s();", test.nm)
+		}
+		rv, err := ctx.Eval(call, EvalGlobal)
+		trc("%s: %T(%[2]v)", call, rv)
+		if err != nil {
+			t.Errorf("calling %s: err=%v", test.nm, err)
+			continue
+		}
+
+		switch x := rv.(type) {
+		case nil:
+			if test.v != nil {
+				t.Errorf("expected nil")
+			}
+		case Undefined, string, int, bool, float64:
+			if g, e := x, test.v; g != e {
+				t.Errorf("got %v, expected %v", g, e)
+			}
+		// case *big.Int:
+		// 	if g, e := x, big.NewInt(int64(test.v.(int))); g.Cmp(e) != 0 {
+		// 		t.Errorf("got %v, expected %v", g, e)
+		// 	}
+		// case *big.Float:
+		// 	if g, e := x, big.NewFloat(float64(test.v.(float64))); g.Cmp(e) != 0 {
+		// 		t.Errorf("got %v, expected %v", g, e)
+		// 	}
+		// case decimal.Decimal:
+		// 	if g, e := x.String(), test.v; g != e {
+		// 		t.Errorf("got %v, expected %v", g, e)
+		// 	}
+		// case *Object:
+		// 	if g, e := x.json, test.v; g != e {
+		// 		t.Errorf("got %v, expected %v", g, e)
+		// 	}
+		default:
+			panic(todo("%T", x))
 		}
 	}
 }
