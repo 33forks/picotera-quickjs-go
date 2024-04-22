@@ -532,11 +532,10 @@ func testRegisterGoFuncOK(t *testing.T) {
 		{"f1", false, func() {}, nil, "", Undefined{}},
 		{"f2", false, func() any { return nil }, nil, "", nil},
 		{"f3", false, func() *int { return nil }, nil, "", nil},
-		{"f5", false, func() *int { return nil }, nil, "", nil},
-		{"f6", false, func() *int { i := 42; return &i }, nil, "", 42},
-		{"f7", false, func() float64 { return 0.5 }, nil, "", 0.5},
-		{"f8", false, func() float32 { return 2.5 }, nil, "", 2.5},
-		{"f9", false, func() string { return "2.5" }, nil, "", "2.5"},
+		{"f4", false, func() *int { i := 42; return &i }, nil, "", 42},
+		{"f5", false, func() float64 { return 0.5 }, nil, "", 0.5},
+		{"f6", false, func() float32 { return 2.5 }, nil, "", 2.5},
+		{"f7", false, func() string { return "2.5" }, nil, "", "2.5"},
 	} {
 		if err := m.RegisterFunc(test.nm, test.f, test.wantThis); err != nil {
 			t.Errorf("registering function '%T(%[1]v)': %v", test, err)
