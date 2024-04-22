@@ -547,7 +547,6 @@ func testRegisterGoFuncOK(t *testing.T) {
 			call = fmt.Sprintf("%s();", test.nm)
 		}
 		rv, err := m.Eval(call, EvalGlobal)
-		trc("%s: %T(%[2]v)", call, rv)
 		if err != nil {
 			t.Errorf("calling %s: err=%v", test.nm, err)
 			continue
