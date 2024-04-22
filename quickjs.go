@@ -64,8 +64,6 @@ var (
 )
 
 // Runtime represents a Javascript runtime corresponding to an object heap.
-// Several Runtimes can exist at the same time but they cannot exchange
-// objects.
 //
 // Note: Runtime is not safe for concurrent use by multiple goroutines.
 type Runtime struct {
