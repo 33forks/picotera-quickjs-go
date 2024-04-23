@@ -26,22 +26,8 @@ func ExampleVM_Call_function() {
 	// 1234 <nil>
 }
 
-// Use Eval and the std module.
-func ExampleVM_Eval_useStd() {
-	m, _ := NewVM()
-	defer m.Close()
-	m.InitModuleStd()
-	m.Eval(`
-import * as std from 'std';
-globalThis.std = std;
-`, EvalModule)
-	fmt.Println(m.Eval(`std.sprintf('%s %i', 'hello', 42);`, EvalGlobal))
-	// Output:
-	// hello 42 <nil>
-}
-
-// Use Call and the std module.
-func ExampleVM_Call_useStd() {
+// Use the std module.
+func ExampleVM_InitModuleStd() {
 	m, _ := NewVM()
 	defer m.Close()
 	m.InitModuleStd()
