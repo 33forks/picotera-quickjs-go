@@ -62,9 +62,8 @@ import (
 var (
 	_ json.Marshaler = (*Object)(nil)
 
-	errorInterface = reflect.TypeOf((*error)(nil)).Elem()
-	null           = lib.TJSValue{Ftag: lib.EJS_TAG_NULL}
-	undefined      = lib.TJSValue{Ftag: lib.EJS_TAG_UNDEFINED}
+	null      = lib.TJSValue{Ftag: lib.EJS_TAG_NULL}
+	undefined = lib.TJSValue{Ftag: lib.EJS_TAG_UNDEFINED}
 
 	staticMagic atomic.Int32
 
@@ -868,7 +867,7 @@ func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uint
 		}
 	}
 	if haveArgs < info.minArgs {
-		trc("wantThis=%v haveArgs=%v minArgs=%v maxArgs=%v argc=%v", info.wantThis, haveArgs, info.minArgs, info.maxArgs, argc)
+		// trc("wantThis=%v haveArgs=%v minArgs=%v maxArgs=%v argc=%v", info.wantThis, haveArgs, info.minArgs, info.maxArgs, argc)
 		return throwTypeError(tls, ctx, fmt.Sprintf("not enough arguments in call to %s", info.name))
 	}
 
