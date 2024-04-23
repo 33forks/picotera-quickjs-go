@@ -66,132 +66,210 @@ var (
 	null           = lib.TJSValue{Ftag: lib.EJS_TAG_NULL}
 	undefined      = lib.TJSValue{Ftag: lib.EJS_TAG_UNDEFINED}
 
-	globalMagic atomic.Int32
+	staticMagic atomic.Int32
 
 	goFuncsMu sync.Mutex
 	goFuncs   = map[int32]*goFunc{}
+	freeMagic = map[int32]struct{}{}
 )
 
-// VM represents a single Context Runtime. It has all Context methods promoted.
-type VM struct {
-	*Context
-}
-
-// NewVM returns a newly created VM.
-func NewVM() (*VM, error) {
-	r, err := NewRuntime()
-	if err != nil {
-		return nil, err
-	}
-
-	c, err := r.NewContext()
-	if err != nil {
-		r.Close()
-		return nil, err
-	}
-
-	return &VM{Context: c}, nil
-}
-
-// Close releases the resources held by 'm'.
-func (m *VM) Close() (err error) {
-	r := m.runtime
-
-	if err = m.Context.Close(); err != nil {
-		return err
-	}
-
-	return r.Close()
-}
-
-// Runtime represents a Javascript runtime.
+// runtime represents a Javascript runtime.
 //
-// Note: Runtime is not safe for concurrent use by multiple goroutines.
-type Runtime struct {
-	runtime uintptr // lib.TJSRuntime
-	tls     *libc.TLS
+// Note: runtime is not safe for concurrent use by multiple goroutines.
+type runtime struct {
+	cRuntime uintptr // lib.TJSRuntime
+	tls      *libc.TLS
 }
 
-// NewRuntime returns a newly create Runtime
-func NewRuntime() (*Runtime, error) {
+// newRuntime returns a newly create Runtime
+func newRuntime() (*runtime, error) {
 	tls := libc.NewTLS()
-	runtime := lib.XJS_NewRuntime(tls)
-	if runtime == 0 {
+	r := lib.XJS_NewRuntime(tls)
+	if r == 0 {
 		tls.Close()
-		return nil, fmt.Errorf("failed to create new Javascript runtime")
+		return nil, fmt.Errorf("failed to create a new Javascript runtime")
 	}
 
-	return &Runtime{runtime: runtime, tls: tls}, nil
+	return &runtime{cRuntime: r, tls: tls}, nil
 }
 
-// Close releases the resources held by r.
-func (r *Runtime) Close() error {
-	lib.XJS_FreeRuntime(r.tls, r.runtime)
+// close releases the resources held by r.
+func (r *runtime) close() error {
+	lib.XJS_FreeRuntime(r.tls, r.cRuntime)
 	r.tls.Close()
-	*r = Runtime{}
+	*r = runtime{}
 	return nil
 }
 
-// Context represents a Javascript context (or Realm). Each Context has its
-// own global objects and system objects. There can be several Contexts per
-// Runtime.
-//
-// Note: Context is not safe for concurrent use by multiple goroutines.
-type Context struct {
-	// Safe to share, not reference counted
-	int32_2      lib.TJSValue
-	int32_16     lib.TJSValue
-	context      uintptr // lib.TJSContext
-	goFuncs      map[string]int32
-	runtime      *Runtime
-	toStringArgv uintptr
-}
-
-// NewContext returns a newly created Context.
-func (r *Runtime) NewContext() (*Context, error) {
+// newVM returns a newly created VM.
+func (r *runtime) newVM() (*VM, error) {
 	argv := libc.Xcalloc(r.tls, 2, libc.Tsize_t(unsafe.Sizeof(lib.TJSValue{})))
 	if argv == 0 {
 		return nil, fmt.Errorf("OOM")
 	}
 
-	context := lib.XJS_NewContext(r.tls, r.runtime)
-	if context == 0 {
-		return nil, fmt.Errorf("failed to create new Javascript context")
+	c := lib.XJS_NewContext(r.tls, r.cRuntime)
+	if c == 0 {
+		return nil, fmt.Errorf("failed to create a new Javascript context")
 	}
 
-	return &Context{
-		context:      context,
-		int32_2:      lib.XNewInt32(r.tls, context, 2),
-		int32_16:     lib.XNewInt32(r.tls, context, 16),
+	return &VM{
+		cContext:     c,
+		int32_2:      lib.XNewInt32(r.tls, c, 2),
+		int32_16:     lib.XNewInt32(r.tls, c, 16),
 		runtime:      r,
 		toStringArgv: argv,
 	}, nil
 }
 
-// Close releases the resources held by c.
-func (c *Context) Close() error {
-	tls := c.runtime.tls
+func newInt32(n int32) (r lib.TJSValue) {
+	*(*int32)(unsafe.Pointer(&r)) = n
+	r.Ftag = lib.EJS_TAG_INT
+	return r
+}
+
+func newFloat(n float64) (r lib.TJSValue) {
+	*(*float64)(unsafe.Pointer(&r)) = n
+	r.Ftag = lib.EJS_TAG_FLOAT64
+	return r
+}
+
+func (m *VM) newString(s string) (r lib.TJSValue) {
+	tls := m.runtime.tls
+	ctx := m.cContext
+	p := mustCString(s)
+
+	defer libc.Xfree(tls, p)
+
+	return lib.XJS_NewStringLen(tls, ctx, p, lib.Tsize_t(len(s)))
+}
+
+func newBool(n bool) (r lib.TJSValue) {
+	switch {
+	case n:
+		*(*int32)(unsafe.Pointer(&r)) = 1
+	default:
+		*(*int32)(unsafe.Pointer(&r)) = 0
+	}
+	r.Ftag = lib.EJS_TAG_BOOL
+	return r
+}
+
+func jsInt(n int64) lib.TJSValue {
+	switch {
+	case n >= math.MinInt32 && n <= math.MaxInt32:
+		return newInt32(int32(n))
+	default:
+		return newFloat(float64(n))
+	}
+}
+
+func jsUint(n uint64) lib.TJSValue {
+	switch {
+	case n <= math.MaxInt32:
+		return newInt32(int32(n))
+	default:
+		return newFloat(float64(n))
+	}
+}
+
+func isException(v lib.TJSValue) bool {
+	return v.Ftag == lib.EJS_TAG_EXCEPTION
+}
+
+var (
+	jsonFNC = [...]byte{'J', 'S', 'O', 'N', 0}
+	jsonFN  = uintptr(unsafe.Pointer(&jsonFNC[0]))
+)
+
+func (m *VM) parseJSON(s string, flags int32) (r lib.TJSValue, err error) {
+	tls := m.runtime.tls
+	ctx := m.cContext
+
+	cs := mustCString(s)
+
+	defer libc.Xfree(tls, cs)
+
+	r = lib.XJS_ParseJSON2(tls, ctx, cs, lib.Tsize_t(len(s)), jsonFN, flags)
+	if isException(r) {
+		err = m.errFromException()
+	}
+	return r, err
+}
+
+// Unsupported represents an unsupported Javascript value.
+type Unsupported struct{}
+
+// Undefined represents the Javascript value "undefined".
+type Undefined struct{}
+
+// Object represents the value of a Javascript object, but not the javascript
+// object instance itself.
+type Object struct {
+	json               string
+	forceNonComparable []byte
+}
+
+// String implements fmt.Stringer.
+func (o *Object) String() string {
+	return o.json
+}
+
+// MarshalJSON implements encoding/json.Marshaler.
+func (o *Object) MarshalJSON() (r []byte, err error) {
+	return []byte(o.json), nil
+}
+
+// VM represents a Javascript context (or Realm). Each VM has its
+// own global objects and system objects.
+//
+// Note: VM is not safe for concurrent use by multiple goroutines.
+type VM struct {
+	// Safe to share, not reference counted
+	int32_2      lib.TJSValue
+	int32_16     lib.TJSValue
+	cContext     uintptr // lib.TJSContext
+	goFuncs      map[string]int32
+	runtime      *runtime
+	toStringArgv uintptr
+}
+
+// NewVM returns a newly created VM.
+func NewVM() (*VM, error) {
+	r, err := newRuntime()
+	if err != nil {
+		return nil, err
+	}
+
+	return r.newVM()
+}
+
+// Close releases the resources held by 'm'.
+func (m *VM) Close() error {
+	tls := m.runtime.tls
 	var a []int32
 	var b []*goFunc
-	for _, k := range c.goFuncs {
+	for _, k := range m.goFuncs {
 		a = append(a, k)
 	}
 	goFuncsMu.Lock()
 	for _, k := range a {
 		b = append(b, goFuncs[k])
+		freeMagic[k] = struct{}{}
 		delete(goFuncs, k)
 	}
 	goFuncsMu.Unlock()
 
 	for _, v := range b {
-		libc.Xfree(tls, v.cname)
+		libc.Xfree(tls, v.cName)
 		libc.Xfree(tls, v.tab)
 	}
 
-	libc.Xfree(tls, c.toStringArgv)
-	lib.XJS_FreeContext(c.runtime.tls, c.context)
-	*c = Context{}
-	return nil
+	libc.Xfree(tls, m.toStringArgv)
+	lib.XJS_FreeContext(m.runtime.tls, m.cContext)
+	r := m.runtime
+	*m = VM{}
+	return r.close()
 }
 
 // Eval flags.
@@ -218,8 +296,8 @@ var evalFN = [...]byte{'<', 'e', 'v', 'a', 'l', '>', 0}
 //	BigDecimal              github.com/shopspring/decimal.Decimal   nil
 //	object                  *Object                                 nil
 //	any other type          Unsupported                             nil
-func (c *Context) Eval(javascript string, flags int) (r any, err error) {
-	tls := c.runtime.tls
+func (m *VM) Eval(javascript string, flags int) (r any, err error) {
+	tls := m.runtime.tls
 	ps, err := libc.CString(javascript)
 	if err != nil {
 		panic(err)
@@ -227,12 +305,12 @@ func (c *Context) Eval(javascript string, flags int) (r any, err error) {
 
 	defer libc.Xfree(tls, ps)
 
-	return c.value(lib.XJS_Eval(tls, c.context, ps, libc.Tsize_t(len(javascript)), uintptr(unsafe.Pointer(&evalFN)), int32(flags)))
+	return m.value(lib.XJS_Eval(tls, m.cContext, ps, libc.Tsize_t(len(javascript)), uintptr(unsafe.Pointer(&evalFN)), int32(flags)), true)
 }
 
-func (c *Context) eval(js string, flags int) lib.TJSValue {
-	tls := c.runtime.tls
-	ctx := c.context
+func (m *VM) eval(js string, flags int) lib.TJSValue {
+	tls := m.runtime.tls
+	ctx := m.cContext
 	ps, err := libc.CString(js)
 	if err != nil {
 		panic(err)
@@ -243,8 +321,8 @@ func (c *Context) eval(js string, flags int) lib.TJSValue {
 	return lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(js)), uintptr(unsafe.Pointer(&evalFN)), int32(flags))
 }
 
-func (c *Context) globalObject() lib.TJSValue {
-	return lib.XJS_GetGlobalObject(c.runtime.tls, c.context)
+func (m *VM) globalObject() lib.TJSValue {
+	return lib.XJS_GetGlobalObject(m.runtime.tls, m.cContext)
 }
 
 // Call evaluates 'function(args...)' and returns the resulting (value, error).
@@ -265,9 +343,9 @@ func (c *Context) globalObject() lib.TJSValue {
 //	github.com/shopspring/decimal.Decimal   BigDecimal
 //	*Object                                 object
 //	any other type                          object from JSON produced by encoding.json/Marshall(arg)
-func (c *Context) Call(function string, args ...any) (r any, err error) {
-	tls := c.runtime.tls
-	ctx := c.context
+func (m *VM) Call(function string, args ...any) (r any, err error) {
+	tls := m.runtime.tls
+	ctx := m.cContext
 	ps, err := libc.CString(function)
 	if err != nil {
 		panic(err)
@@ -279,49 +357,16 @@ func (c *Context) Call(function string, args ...any) (r any, err error) {
 
 	defer lib.XFreeValue(tls, ctx, f)
 
-	g := c.globalObject()
+	g := m.globalObject()
 
 	defer lib.XFreeValue(tls, ctx, g)
 
-	return c.call(f, g, args...)
+	return m.call(f, g, args...)
 }
 
-func newInt32(n int32) (r lib.TJSValue) {
-	*(*int32)(unsafe.Pointer(&r)) = n
-	r.Ftag = lib.EJS_TAG_INT
-	return r
-}
-
-func newFloat(n float64) (r lib.TJSValue) {
-	*(*float64)(unsafe.Pointer(&r)) = n
-	r.Ftag = lib.EJS_TAG_FLOAT64
-	return r
-}
-
-func (c *Context) newString(s string) (r lib.TJSValue) {
-	tls := c.runtime.tls
-	ctx := c.context
-	p := mustCString(s)
-
-	defer libc.Xfree(tls, p)
-
-	return lib.XJS_NewStringLen(tls, ctx, p, lib.Tsize_t(len(s)))
-}
-
-func newBool(n bool) (r lib.TJSValue) {
-	switch {
-	case n:
-		*(*int32)(unsafe.Pointer(&r)) = 1
-	default:
-		*(*int32)(unsafe.Pointer(&r)) = 0
-	}
-	r.Ftag = lib.EJS_TAG_BOOL
-	return r
-}
-
-func (c *Context) call(f, this lib.TJSValue, args ...any) (r any, err error) {
-	tls := c.runtime.tls
-	ctx := c.context
+func (m *VM) call(f, this lib.TJSValue, args ...any) (r any, err error) {
+	tls := m.runtime.tls
+	ctx := m.cContext
 	if lib.XJS_IsFunction(tls, ctx, f) == 0 {
 		return nil, fmt.Errorf("cannot call a non-function")
 	}
@@ -395,21 +440,21 @@ func (c *Context) call(f, this lib.TJSValue, args ...any) (r any, err error) {
 			jsArgs = append(jsArgs, jv)
 		case *big.Int:
 			s := x.String() + "n"
-			jv := c.eval(s, EvalGlobal)
+			jv := m.eval(s, EvalGlobal)
 
 			defer lib.XFreeValue(tls, ctx, jv)
 
 			jsArgs = append(jsArgs, jv)
 		case *big.Float:
 			s := fmt.Sprintf("BigFloat('%s')", x.String())
-			jv := c.eval(s, EvalGlobal)
+			jv := m.eval(s, EvalGlobal)
 
 			defer lib.XFreeValue(tls, ctx, jv)
 
 			jsArgs = append(jsArgs, jv)
 		case decimal.Decimal:
 			s := x.String() + "m"
-			jv := c.eval(s, EvalGlobal)
+			jv := m.eval(s, EvalGlobal)
 
 			defer lib.XFreeValue(tls, ctx, jv)
 
@@ -447,24 +492,12 @@ func (c *Context) call(f, this lib.TJSValue, args ...any) (r any, err error) {
 		}
 
 	}
-	return c.value(lib.XJS_Call(tls, ctx, f, this, int32(len(jsArgs)), argv))
+	return m.value(lib.XJS_Call(tls, ctx, f, this, int32(len(jsArgs)), argv), true)
 }
 
-// Object represents the value of a Javascript object, but not the javascript
-// object instance itself.
-type Object struct {
-	json               string
-	forceNonComparable []byte
-}
-
-// MarshalJSON implements encoding/json.Marshaler.
-func (o *Object) MarshalJSON() (r []byte, err error) {
-	return []byte(o.json), nil
-}
-
-func (c *Context) newObject(v lib.TJSValue) *Object {
-	tls := c.runtime.tls
-	ctx := c.context
+func (m *VM) newObject(v lib.TJSValue) *Object {
+	tls := m.runtime.tls
+	ctx := m.cContext
 	json := lib.XJS_JSONStringify(tls, ctx, v, undefined, undefined)
 
 	defer lib.XFreeValue(tls, ctx, json)
@@ -476,12 +509,6 @@ func (c *Context) newObject(v lib.TJSValue) *Object {
 	return &Object{json: libc.GoString(p)}
 }
 
-// Unsupported represents an unsupported Javascript value.
-type Unsupported struct{}
-
-// Undefined represents the Javascript value "undefined".
-type Undefined struct{}
-
 var (
 	toStringC = [...]byte{'t', 'o', 'S', 't', 'r', 'i', 'n', 'g', 0}
 	toString  = uintptr(unsafe.Pointer(&toStringC[0]))
@@ -489,24 +516,24 @@ var (
 
 // value "unpacks" 'v'. FreeValue(v) is called before returning, 'v' must not
 // be used afterwards.
-func (c *Context) value(v lib.TJSValue) (r any, err error) {
-	tls := c.runtime.tls
-	ctx := c.context
-	if v.Ftag < 0 {
+func (m *VM) value(v lib.TJSValue, free bool) (r any, err error) {
+	tls := m.runtime.tls
+	ctx := m.cContext
+	if free && v.Ftag < 0 {
 		// all tags with a reference count are negative
 		defer lib.XFreeValue(tls, ctx, v)
 	}
 
 	switch v.Ftag {
 	case lib.EJS_TAG_BIG_DECIMAL: // -11,
-		m := lib.XJS_GetPropertyStr(tls, ctx, v, toString)
-		if m.Ftag != lib.EJS_TAG_OBJECT {
+		ps := lib.XJS_GetPropertyStr(tls, ctx, v, toString)
+		if ps.Ftag != lib.EJS_TAG_OBJECT {
 			panic("failed to get BigDecimal.toString()")
 		}
 
-		defer lib.XFreeValue(tls, ctx, m)
+		defer lib.XFreeValue(tls, ctx, ps)
 
-		jsString := lib.XJS_Call(tls, ctx, m, v, 0, c.toStringArgv)
+		jsString := lib.XJS_Call(tls, ctx, ps, v, 0, m.toStringArgv)
 
 		defer lib.XFreeValue(tls, ctx, jsString)
 
@@ -521,15 +548,15 @@ func (c *Context) value(v lib.TJSValue) (r any, err error) {
 
 		return n, nil
 	case lib.EJS_TAG_BIG_INT: // -10,
-		m := lib.XJS_GetPropertyStr(tls, ctx, v, toString)
-		if m.Ftag != lib.EJS_TAG_OBJECT {
+		ps := lib.XJS_GetPropertyStr(tls, ctx, v, toString)
+		if ps.Ftag != lib.EJS_TAG_OBJECT {
 			panic("failed to get BigInt.toString()")
 		}
 
-		defer lib.XFreeValue(tls, ctx, m)
+		defer lib.XFreeValue(tls, ctx, ps)
 
-		*(*lib.TJSValue)(unsafe.Pointer(c.toStringArgv)) = c.int32_16
-		jsString := lib.XJS_Call(tls, ctx, m, v, 1, c.toStringArgv)
+		*(*lib.TJSValue)(unsafe.Pointer(m.toStringArgv)) = m.int32_16
+		jsString := lib.XJS_Call(tls, ctx, ps, v, 1, m.toStringArgv)
 
 		defer lib.XFreeValue(tls, ctx, jsString)
 
@@ -544,15 +571,15 @@ func (c *Context) value(v lib.TJSValue) (r any, err error) {
 
 		return n, nil
 	case lib.EJS_TAG_BIG_FLOAT: // -9,
-		m := lib.XJS_GetPropertyStr(tls, ctx, v, toString)
-		if m.Ftag != lib.EJS_TAG_OBJECT {
+		ps := lib.XJS_GetPropertyStr(tls, ctx, v, toString)
+		if ps.Ftag != lib.EJS_TAG_OBJECT {
 			panic("failed to get BigInt.toString()")
 		}
 
-		defer lib.XFreeValue(tls, ctx, m)
+		defer lib.XFreeValue(tls, ctx, ps)
 
-		*(*lib.TJSValue)(unsafe.Pointer(c.toStringArgv)) = c.int32_16
-		jsString := lib.XJS_Call(tls, ctx, m, v, 1, c.toStringArgv)
+		*(*lib.TJSValue)(unsafe.Pointer(m.toStringArgv)) = m.int32_16
+		jsString := lib.XJS_Call(tls, ctx, ps, v, 1, m.toStringArgv)
 
 		defer lib.XFreeValue(tls, ctx, jsString)
 
@@ -575,7 +602,7 @@ func (c *Context) value(v lib.TJSValue) (r any, err error) {
 
 		return libc.GoString(p), nil
 	case lib.EJS_TAG_OBJECT: // -1
-		return c.newObject(v), nil
+		return m.newObject(v), nil
 	case lib.EJS_TAG_INT: //  0,
 		return int(*(*int32)(unsafe.Pointer(&v))), nil
 	case lib.EJS_TAG_BOOL: //  1,
@@ -585,29 +612,59 @@ func (c *Context) value(v lib.TJSValue) (r any, err error) {
 	case lib.EJS_TAG_UNDEFINED: //  3,
 		return Undefined{}, nil
 	case lib.EJS_TAG_EXCEPTION: // 6,
-		e := lib.XJS_GetException(tls, ctx)
-
-		defer lib.XFreeValue(tls, ctx, e)
-
-		p := lib.XToCString(tls, ctx, e)
-
-		defer lib.XJS_FreeCString(tls, ctx, p)
-
-		return nil, fmt.Errorf("%s", libc.GoString(p))
+		return nil, m.errFromException()
 	case lib.EJS_TAG_FLOAT64: // 7,
 		return *(*float64)(unsafe.Pointer(&v)), nil
 	}
 	return Unsupported{}, nil
 }
 
-// AddIntrinsicBigFloat adds the BigFloat object to 'c'.
-func (c *Context) AddIntrinsicBigFloat() {
-	lib.XJS_AddIntrinsicBigFloat(c.runtime.tls, c.context)
+func (m *VM) errFromException() error {
+	tls := m.runtime.tls
+	ctx := m.cContext
+	e := lib.XJS_GetException(tls, ctx)
+
+	defer lib.XFreeValue(tls, ctx, e)
+
+	p := lib.XToCString(tls, ctx, e)
+
+	defer lib.XJS_FreeCString(tls, ctx, p)
+
+	return fmt.Errorf("%s", libc.GoString(p))
 }
 
-// AddIntrinsicBigDecimal adds the BigDecimal object to 'c'.
-func (c *Context) AddIntrinsicBigDecimal() {
-	lib.XJS_AddIntrinsicBigDecimal(c.runtime.tls, c.context)
+// AddIntrinsicBigFloat adds the BigFloat object to 'm'.
+func (m *VM) AddIntrinsicBigFloat() {
+	lib.XJS_AddIntrinsicBigFloat(m.runtime.tls, m.cContext)
+}
+
+// AddIntrinsicBigDecimal adds the BigDecimal object to 'm'.
+func (m *VM) AddIntrinsicBigDecimal() {
+	lib.XJS_AddIntrinsicBigDecimal(m.runtime.tls, m.cContext)
+}
+
+var (
+	stdC = [...]byte{'s', 't', 'd', 0}
+	std  = uintptr(unsafe.Pointer(&stdC[0]))
+)
+
+// InitModuleStd adds the "std" module to 'm'.
+func (m *VM) InitModuleStd() error {
+	tls := m.runtime.tls
+	ctx := m.cContext
+	if lib.Xjs_init_module_std(tls, ctx, std) == 0 {
+		return fmt.Errorf("module initialization failed")
+	}
+
+	return nil
+}
+
+// AddStdHelpers adds the 'print' and 'console' global objects to 'm'.
+func (m *VM) AddStdHelpers() error {
+	tls := m.runtime.tls
+	ctx := m.cContext
+	lib.Xjs_std_add_helpers(tls, ctx, -1, 0)
+	return nil
 }
 
 func throwTypeError(tls *libc.TLS, ctx uintptr, msg string, args ...any) lib.TJSValue {
@@ -644,14 +701,14 @@ func mustCString(s string) uintptr {
 }
 
 type goFunc struct {
-	cname        uintptr
-	ctx          *Context
+	cName        uintptr
 	f            reflect.Value
 	in           []reflect.Type
 	name         string
 	out          []reflect.Type
 	tab          uintptr
 	variadicType reflect.Type
+	vm           *VM
 
 	minArgs int
 	maxArgs int
@@ -662,52 +719,52 @@ type goFunc struct {
 // RegisterFunc registers a Go function 'f' and makes it callable from
 // Javascript.
 //
-// The function must have zero, one or two return values. If it has two return
-// values, the second one must be of type error. In such case a non-nil
-// returned error is translated to a Javascript exception.
+// The 'f' argument can be a regular Go function, a closure, a method
+// expression or a method value. All of them are called 'Go function' below.
 //
-// The function can have zero or more parameters. If 'wantThis' is true then
+// The Go function can have zero or more parameters. If 'wantThis' is true then
 // the first parameter of the Go function will get the Javascript value of
-// 'this'.  Depending on context, 'this' can be nil.
+// 'this'.  Depending on context, 'this' can be Javascript null or undefined.
+//
+// Go functions with multiple results return them as an Javascript array.
+//
+// Go nil errors are converted to Javascript null.
+//
+// Go non-nil errors are converted to Javascript strings using the Error()
+// method.
 //
 // Any Go -> Javascript or Javascript -> Go type conversion between arguments
 // and return values that fails throws a Javascript exception.
-func (c *Context) RegisterFunc(name string, f any, wantThis bool) (err error) {
+//
+// There is a process-wide limit on the total number of currently registered Go
+// functions.
+//
+// Note: The 'name' argument should be a valid Javascript identifier. It is not
+// currently enforced but this may change later.
+func (m *VM) RegisterFunc(name string, f any, wantThis bool) (err error) {
 	if name == "" {
 		return fmt.Errorf("func name cannot be empty")
 	}
 
-	if _, ok := c.goFuncs[name]; ok {
+	if _, ok := m.goFuncs[name]; ok {
 		return fmt.Errorf("func already registered: %s", name)
 	}
 
-	tls := c.runtime.tls
-	ctx := c.context
+	tls := m.runtime.tls
+	ctx := m.cContext
 	val := reflect.ValueOf(f)
 	typ := reflect.TypeOf(f)
 	if typ.Kind() != reflect.Func {
 		return fmt.Errorf("%s is not a function", name)
 	}
 
-	switch typ.NumOut() {
-	case 0:
-		if wantThis {
-			return fmt.Errorf("'wantThis' is true but 'f' has zero parameters")
-		}
-	case 1:
-		// ok
-	case 2:
-		// Second return value must be error
-		if t := typ.Out(1); t.Kind() != reflect.Interface || !t.Implements(errorInterface) {
-			return fmt.Errorf("%s has two return values, the second one must implement error: %v", name, t)
-		}
-	default:
-		return fmt.Errorf("%s has more than two return values", name)
+	if wantThis && typ.NumIn() == 0 {
+		return fmt.Errorf("'wantThis' is true but 'f' has zero parameters")
 	}
 
 	minArgs := typ.NumIn()
 	if wantThis {
-		minArgs++
+		minArgs--
 	}
 	maxArgs := minArgs
 	var vt reflect.Type
@@ -715,37 +772,56 @@ func (c *Context) RegisterFunc(name string, f any, wantThis bool) (err error) {
 		maxArgs = -1
 		sliceT := typ.In(typ.NumIn() - 1)
 		vt = sliceT.Elem()
+		minArgs--
 	}
 	info := &goFunc{
-		ctx:          c,
 		f:            val,
 		maxArgs:      maxArgs,
 		minArgs:      minArgs,
 		name:         name,
 		variadicType: vt,
+		vm:           m,
 		wantThis:     wantThis,
 	}
 	for i := 0; i < typ.NumIn(); i++ {
 		info.in = append(info.in, typ.In(i))
 	}
+	if maxArgs < 0 {
+		info.in = info.in[:len(info.in)-1]
+	}
 	for i := 0; i < typ.NumOut(); i++ {
 		info.out = append(info.out, typ.Out(i))
 	}
-	magic := globalMagic.Add(1)
+
+	magic := int32(-1)
 	goFuncsMu.Lock()
+	for k := range freeMagic {
+		magic = k
+		delete(freeMagic, k)
+		break
+	}
+	if magic < 0 {
+		magic = staticMagic.Add(1)
+		if magic > math.MaxInt16 {
+			staticMagic.Add(-1)
+			goFuncsMu.Unlock()
+			return fmt.Errorf("too many registered functions")
+		}
+
+	}
 	goFuncs[magic] = info
 	goFuncsMu.Unlock()
-	if c.goFuncs == nil {
-		c.goFuncs = map[string]int32{}
+	if m.goFuncs == nil {
+		m.goFuncs = map[string]int32{}
 	}
-	c.goFuncs[name] = magic
+	m.goFuncs[name] = magic
 
-	cname, err := libc.CString(name)
+	cName, err := libc.CString(name)
 	if err != nil {
 		return err
 	}
 
-	info.cname = cname
+	info.cName = cName
 	argc := int32(typ.NumIn()) - 1
 	if argc < 0 {
 		argc = 0
@@ -753,18 +829,17 @@ func (c *Context) RegisterFunc(name string, f any, wantThis bool) (err error) {
 	tab := libc.Xcalloc(tls, 1, libc.Tsize_t(unsafe.Sizeof(lib.TJSCFunctionListEntry{})))
 	info.tab = tab
 
-	g := c.globalObject()
+	g := m.globalObject()
 
 	defer lib.XFreeValue(tls, ctx, g)
 
-	(*lib.TJSCFunctionListEntry)(unsafe.Pointer(tab)).Fname = cname
+	(*lib.TJSCFunctionListEntry)(unsafe.Pointer(tab)).Fname = cName
 	(*lib.TJSCFunctionListEntry)(unsafe.Pointer(tab)).Fprop_flags = lib.MJS_PROP_WRITABLE | lib.MJS_PROP_CONFIGURABLE
 	(*lib.TJSCFunctionListEntry)(unsafe.Pointer(tab)).Fdef_type = lib.MJS_DEF_CFUNC
 	(*lib.TJSCFunctionListEntry)(unsafe.Pointer(tab)).Fmagic = int16(magic)
 	(*lib.TJSCFunctionListEntry)(unsafe.Pointer(tab)).Fu.Ffunc1.Flength = uint8(argc)
 	(*lib.TJSCFunctionListEntry)(unsafe.Pointer(tab)).Fu.Ffunc1.Fcproto = lib.EJS_CFUNC_generic_magic
-	(*lib.TJSCFunctionListEntry)(unsafe.Pointer(tab)).Fu.Ffunc1.Fcfunc.Fgeneric = fp(call)
-
+	(*lib.TJSCFunctionListEntry)(unsafe.Pointer(tab)).Fu.Ffunc1.Fcfunc.Fgeneric = fp(callGo)
 	lib.XJS_SetPropertyFunctionList(tls, ctx, g, tab, 1)
 	return nil
 }
@@ -775,7 +850,7 @@ func fp(f interface{}) uintptr {
 }
 
 // typedef JSValue JSCFunctionMagic(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic);
-func call(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uintptr, magic int32) (r lib.TJSValue) {
+func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uintptr, magic int32) (r lib.TJSValue) {
 	goFuncsMu.Lock()
 	info := goFuncs[magic]
 	goFuncsMu.Unlock()
@@ -784,80 +859,100 @@ func call(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uintpt
 		return throwInternalError(tls, ctx, "callback id=%i not registered", magic)
 	}
 
-	c := info.ctx
-	if int(argc) < info.minArgs {
+	m := info.vm
+	haveArgs := int(argc)
+	if info.wantThis {
+		haveArgs--
+		if haveArgs < 0 {
+			haveArgs = 0
+		}
+	}
+	if haveArgs < info.minArgs {
+		trc("wantThis=%v haveArgs=%v minArgs=%v maxArgs=%v argc=%v", info.wantThis, haveArgs, info.minArgs, info.maxArgs, argc)
 		return throwTypeError(tls, ctx, fmt.Sprintf("not enough arguments in call to %s", info.name))
 	}
 
-	if info.maxArgs >= 0 && int(argc) > info.maxArgs {
+	if info.maxArgs >= 0 && haveArgs > info.maxArgs {
+		// trc("wantThis=%v haveArgs=%v minArgs=%v maxArgs=%v argc=%v", info.wantThis, haveArgs, info.minArgs, info.maxArgs, argc)
 		return throwTypeError(tls, ctx, fmt.Sprintf("too many arguments in call to %s", info.name))
 	}
 
-	var err error
 	var in []reflect.Value
-	for i, typ := range info.in {
-		var v lib.TJSValue
-		switch {
-		case info.wantThis && i == 0:
-			_ = typ
-			_ = v
-			panic(todo(""))
-		default:
-			panic(todo(""))
+	i := 0
+	if info.wantThis {
+		v, err := m.value(this, false)
+		if err != nil {
+			return throwTypeError(tls, ctx, fmt.Sprintf("calling %s: argument conversion error: %v", info.name, err))
 		}
+
+		rv := reflect.ValueOf(v)
+		if !rv.Type().AssignableTo(info.in[0]) {
+			return throwTypeError(tls, ctx, fmt.Sprintf("calling %s: cannot assign %s to %s", info.name, rv.Type(), info.in[0]))
+		}
+
+		in = append(in, rv)
+		i++
+	}
+	types := info.in[i:]
+	sz := unsafe.Sizeof(lib.TJSValue{})
+	for i := 0; i < int(argc); i++ {
+		var typ reflect.Type
+		switch {
+		case i < len(types):
+			typ = types[i]
+		default:
+			typ = info.variadicType
+		}
+		v, err := m.value(*(*lib.TJSValue)(unsafe.Pointer(argv)), false)
+		if err != nil {
+			return throwTypeError(tls, ctx, fmt.Sprintf("calling %s: argument conversion error: %v", info.name, err))
+		}
+
+		rv := reflect.ValueOf(v)
+		if !rv.Type().AssignableTo(typ) {
+			return throwTypeError(tls, ctx, fmt.Sprintf("calling %s: cannot assign %s to %s", info.name, rv.Type(), info.in[0]))
+		}
+
+		in = append(in, rv)
+		argv += sz
 	}
 
 	out := info.f.Call(in)
+	var err error
 	switch len(info.out) {
-	case 2:
-		_ = out
-		panic(todo(""))
-	case 1:
-		if r, err = c.jsValue(out[0]); err != nil {
-			return throwTypeError(tls, ctx, fmt.Sprintf("callback id=%v: %v", magic, err))
-		}
-	default:
+	case 0:
 		return undefined
+	case 1:
+		r, err = m.jsValue(out[0])
+	default:
+		r, err = m.jsArray(out)
 	}
+	if err != nil {
+		return throwTypeError(tls, ctx, fmt.Sprintf("callback %s: %v", info.name, err))
+	}
+
 	return r
 }
 
-func (c *Context) jsValue(in reflect.Value) (out lib.TJSValue, err error) {
+func (m *VM) jsValue(in reflect.Value) (out lib.TJSValue, err error) {
+	defer func() {
+		if isException(out) && err == nil {
+			err = m.errFromException()
+		}
+	}()
+
+	switch x := in.Interface().(type) {
+	case nil:
+		return null, nil
+	case Undefined:
+		return undefined, nil
+	case error:
+		return m.newString(x.Error()), nil
+	}
+
 	switch in.Kind() {
-	case reflect.Interface:
-		switch in.Interface().(type) {
-		case Undefined:
-			return undefined, nil
-		case nil:
-			return null, nil
-		}
-
-		typ := reflect.TypeOf(in)
-		panic(todo("", typ.Kind()))
 	case reflect.Pointer:
-		if in.IsNil() {
-			return null, nil
-		}
-
-		switch x := in.Interface().(type) {
-		case *Object:
-			panic(todo("", x))
-		case nil:
-			return null, nil
-		case *big.Int:
-			panic(todo(""))
-		case *big.Float:
-			panic(todo(""))
-		case decimal.Decimal:
-			panic(todo(""))
-		default:
-			ev := in.Elem()
-			if ev.Kind() == reflect.Pointer { // avoid unbound recursion
-				return out, fmt.Errorf("type not supported: %s", ev.Type())
-			}
-
-			return c.jsValue(ev)
-		}
+		return m.jsPtrValue(in)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return jsInt(in.Int()), nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
@@ -865,26 +960,92 @@ func (c *Context) jsValue(in reflect.Value) (out lib.TJSValue, err error) {
 	case reflect.Float64, reflect.Float32:
 		return newFloat(in.Float()), nil
 	case reflect.String:
-		return c.newString(in.String()), nil
+		return m.newString(in.String()), nil
+	case reflect.Struct:
+		switch x := in.Interface().(type) {
+		case decimal.Decimal:
+			s := x.String() + "m"
+			return m.eval(s, EvalGlobal), nil
+		}
+
+		panic(todo("%T", in.Interface()))
+	case reflect.Interface:
+		return m.jsInterfaceValue(in)
+	case reflect.Slice:
+		var a []reflect.Value
+		for i := 0; i < in.Len(); i++ {
+			a = append(a, in.Index(i))
+		}
+		return m.jsArray(a)
 	default:
 		panic(todo("", in.Kind()))
 	}
 }
 
-func jsInt(n int64) lib.TJSValue {
-	switch {
-	case n >= math.MinInt32 && n <= math.MaxInt32:
-		return newInt32(int32(n))
+func (m *VM) jsInterfaceValue(in reflect.Value) (out lib.TJSValue, err error) {
+	if in.IsNil() {
+		return null, nil
+	}
+
+	return m.jsValue(in.Elem())
+}
+
+func (m *VM) jsPtrValue(in reflect.Value) (out lib.TJSValue, err error) {
+	if in.IsNil() {
+		return null, nil
+	}
+
+	switch x := in.Interface().(type) {
+	case *Object:
+		return m.parseJSON(x.json, 0)
+	case *big.Int:
+		s := x.String() + "n"
+		return m.eval(s, EvalGlobal), nil
+	case *big.Float:
+		s := fmt.Sprintf("BigFloat('%s')", x.String())
+		return m.eval(s, EvalGlobal), nil
 	default:
-		return newFloat(float64(n))
+		ev := in.Elem()
+		if ev.Kind() == reflect.Pointer { // avoid unbound recursion
+			return out, fmt.Errorf("type not supported: %T", x)
+		}
+
+		return m.jsValue(ev)
 	}
 }
 
-func jsUint(n uint64) lib.TJSValue {
-	switch {
-	case n <= math.MaxInt32:
-		return newInt32(int32(n))
-	default:
-		return newFloat(float64(n))
+func (m *VM) jsArray(a []reflect.Value) (out lib.TJSValue, err error) {
+	var s []lib.TJSValue
+	for _, v := range a {
+		jv, err := m.jsValue(v)
+		if err != nil {
+			return out, err
+		}
+
+		s = append(s, jv)
 	}
+	return m.jsArrayOf(s)
+}
+
+func (m *VM) jsArrayOf(a []lib.TJSValue) (out lib.TJSValue, err error) {
+	tls := m.runtime.tls
+	ctx := m.cContext
+	sz := unsafe.Sizeof(lib.TJSValue{})
+	argv := libc.Xmalloc(tls, lib.Tsize_t(len(a))*lib.Tsize_t(sz))
+
+	defer libc.Xfree(tls, argv)
+
+	p := argv
+	for _, v := range a {
+		*(*lib.TJSValue)(unsafe.Pointer(p)) = v
+		p += sz
+	}
+	out = lib.ArrayOf(tls, ctx, int32(len(a)), argv)
+	if isException(out) {
+		err = m.errFromException()
+	}
+	for _, v := range a {
+		lib.XFreeValue(tls, ctx, v)
+	}
+	return out, err
 }

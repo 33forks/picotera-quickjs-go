@@ -4,7 +4,7 @@
 
 //go:build libc.memgrind
 
-package quickjs // import "modernc.org/bquickjs"
+package quickjs // import "modernc.org/quickjs"
 
 import (
 	"os"

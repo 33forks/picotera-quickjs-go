@@ -8,15 +8,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
+	goruntime "runtime"
 	"strings"
 	"time"
 )
 
 // origin returns caller's short position, skipping skip frames.
 func origin(skip int) string {
-	pc, fn, fl, _ := runtime.Caller(skip)
-	f := runtime.FuncForPC(pc)
+	pc, fn, fl, _ := goruntime.Caller(skip)
+	f := goruntime.FuncForPC(pc)
 	var fns string
 	if f != nil {
 		fns = f.Name()

@@ -2,14 +2,14 @@
 // Use of the source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package quickjs // import "modernc.org/bquickjs"
+package quickjs // import "modernc.org/quickjs"
 
 import (
 	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
-	"runtime"
+	goruntime "runtime"
 	"runtime/debug"
 	"testing"
 
@@ -19,8 +19,8 @@ import (
 )
 
 var (
-	goos   = runtime.GOOS
-	goarch = runtime.GOARCH
+	goos   = goruntime.GOOS
+	goarch = goruntime.GOARCH
 
 	memgrind bool
 )
@@ -499,16 +499,14 @@ func testRegisterGoFuncMustFail(t *testing.T) {
 		wantThis bool
 		f        any
 	}{
-		{false, 42},                              // Not a function
-		{false, func() (a, b, c int) { return }}, // Too many return values
-		{false, func() (a, b int) { return }},    // Two return values but the second is not error
-		{true, func() {}},                        // Wants this but no params
+		{false, 42},       // Not a function
+		{true, func() {}}, // Wants this but no parameters
 	} {
 		switch err := m.RegisterFunc("myfunc", test.f, test.wantThis); {
 		case err != nil:
 			t.Logf("registering function '%T(%[1]v)' failed as expected: err=%v", test, err)
 		default:
-			t.Errorf("registering function '%T(%[1]v)' should failed", test)
+			t.Errorf("registering should have failed: %T", test.f)
 		}
 	}
 }
@@ -521,7 +519,15 @@ func testRegisterGoFuncOK(t *testing.T) {
 
 	defer m.Close()
 
-	for _, test := range []struct {
+	m.AddIntrinsicBigFloat()
+	m.AddIntrinsicBigDecimal()
+
+	obj, err := m.Eval("obj = {a: 42, b: 'foo'}; obj;", EvalGlobal)
+	if err != nil {
+		t.Fatalf("obj: %v", err)
+	}
+
+	for i, test := range []struct {
 		nm       string
 		wantThis bool
 		f        any
@@ -529,26 +535,57 @@ func testRegisterGoFuncOK(t *testing.T) {
 		call     string
 		v        any
 	}{
-		{"f1", false, func() {}, nil, "", Undefined{}},
-		{"f2", false, func() any { return nil }, nil, "", nil},
-		{"f3", false, func() *int { return nil }, nil, "", nil},
-		{"f4", false, func() *int { i := 42; return &i }, nil, "", 42},
-		{"f5", false, func() float64 { return 0.5 }, nil, "", 0.5},
-		{"f6", false, func() float32 { return 2.5 }, nil, "", 2.5},
-		{"f7", false, func() string { return "2.5" }, nil, "", "2.5"},
+		{"", false, func() {}, nil, "", Undefined{}},
+		{"", false, func() any { return nil }, nil, "", nil},
+		{"", false, func() any { return Undefined{} }, nil, "", Undefined{}},
+		{"", false, func() any { return fmt.Errorf("abc") }, nil, "", "abc"},
+		{"", false, func() any { return error(nil) }, nil, "", nil},
+		{"", false, func() error { return fmt.Errorf("abc") }, nil, "", "abc"},
+		{"", false, func() error { return nil }, nil, "", nil},
+		{"", false, func() *int { return nil }, nil, "", nil},
+		{"", false, func() any { i := 42; return &i }, nil, "", 42},
+		{"", false, func() *int { i := 42; return &i }, nil, "", 42},
+		{"", false, func() float64 { return 0.5 }, nil, "", 0.5},
+		{"", false, func() float32 { return 2.5 }, nil, "", 2.5},
+		{"", false, func() string { return "2.5" }, nil, "", "2.5"},
+		{"", false, func() any { return big.NewInt(42) }, nil, "", 42},
+		{"", false, func() *big.Int { return big.NewInt(42) }, nil, "", 42},
+		{"", false, func() any { return big.NewFloat(0.5) }, nil, "", 0.5},
+		{"", false, func() *big.Float { return big.NewFloat(0.5) }, nil, "", 0.5},
+		{"", false, func() any { return decimal.NewFromInt(42) }, nil, "", "42"},
+		{"", false, func() decimal.Decimal { return decimal.NewFromInt(42) }, nil, "", "42"},
+		{"", false, func() any { return obj }, nil, "", `{"a":42,"b":"foo"}`},
+		{"", false, func() any { return []any{42, "foo"} }, nil, "", `[42,"foo"]`},
+		{"", false, func() []any { return []any{42, "foo"} }, nil, "", `[42,"foo"]`},
+		{"", false, func() []int { return []int{42, 314} }, nil, "", `[42,314]`},
+		{"", false, func() []any { return []any{42, obj, "foo"} }, nil, "", `[42,{"a":42,"b":"foo"},"foo"]`},
+		{"", false, func() (int, string) { return 42, "foo" }, nil, "", `[42,"foo"]`},
+		{"", true, func(any) {}, nil, "", Undefined{}},
+		{"g1", true, func(this any) any { return this }, nil, "var a = {foo: 42, bar: g1}; a.bar();", `{"foo":42}`},
+		{"g2", false, func(in any) any { return in }, nil, "g2(obj)", `{"a":42,"b":"foo"}`},
+		{"g3", false, func(i int, s string) (string, int) { return s, i }, nil, "g3(42, 'foo')", `["foo",42]`},
+		{"g4", false, func(in ...any) []any { return in }, nil, "g4(42, 'foo')", `[42,"foo"]`},
+		{"g5", false, func(s string, args ...any) string { return fmt.Sprintf(s, args...) }, nil, "g5('hello %v %q', 42, 'foo')", `hello 42 "foo"`},
+		{"g6", false, func(in ...any) []any { return in }, nil, "g4()", `[]`},
+		{"g7", false, func(s string, args ...any) string { return fmt.Sprintf(s, args...) }, nil, "g5('hello %v')", `hello %!v(MISSING)`},
 	} {
-		if err := m.RegisterFunc(test.nm, test.f, test.wantThis); err != nil {
+		nm := test.nm
+		if nm == "" {
+			nm = fmt.Sprintf("f%v", i)
+		}
+		if err := m.RegisterFunc(nm, test.f, test.wantThis); err != nil {
 			t.Errorf("registering function '%T(%[1]v)': %v", test, err)
 			continue
 		}
 
 		call := test.call
 		if call == "" {
-			call = fmt.Sprintf("%s();", test.nm)
+			call = fmt.Sprintf("%s()", nm)
 		}
 		rv, err := m.Eval(call, EvalGlobal)
+		t.Logf("%s: %T(%[2]v)", call, rv)
 		if err != nil {
-			t.Errorf("calling %s: err=%v", test.nm, err)
+			t.Errorf("calling %s: err=%v", nm, err)
 			continue
 		}
 
@@ -561,22 +598,22 @@ func testRegisterGoFuncOK(t *testing.T) {
 			if g, e := x, test.v; g != e {
 				t.Errorf("got %v, expected %v", g, e)
 			}
-		// case *big.Int:
-		// 	if g, e := x, big.NewInt(int64(test.v.(int))); g.Cmp(e) != 0 {
-		// 		t.Errorf("got %v, expected %v", g, e)
-		// 	}
-		// case *big.Float:
-		// 	if g, e := x, big.NewFloat(float64(test.v.(float64))); g.Cmp(e) != 0 {
-		// 		t.Errorf("got %v, expected %v", g, e)
-		// 	}
-		// case decimal.Decimal:
-		// 	if g, e := x.String(), test.v; g != e {
-		// 		t.Errorf("got %v, expected %v", g, e)
-		// 	}
-		// case *Object:
-		// 	if g, e := x.json, test.v; g != e {
-		// 		t.Errorf("got %v, expected %v", g, e)
-		// 	}
+		case *big.Int:
+			if g, e := x, big.NewInt(int64(test.v.(int))); g.Cmp(e) != 0 {
+				t.Errorf("got %v, expected %v", g, e)
+			}
+		case *big.Float:
+			if g, e := x, big.NewFloat(float64(test.v.(float64))); g.Cmp(e) != 0 {
+				t.Errorf("got %v, expected %v", g, e)
+			}
+		case decimal.Decimal:
+			if g, e := x.String(), test.v; g != e {
+				t.Errorf("got %v, expected %v", g, e)
+			}
+		case *Object:
+			if g, e := x.json, test.v; g != e {
+				t.Errorf("%s: got %v, expected %v", nm, g, e)
+			}
 		default:
 			panic(todo("%T", x))
 		}

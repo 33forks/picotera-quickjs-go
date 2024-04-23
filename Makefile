@@ -2,14 +2,14 @@
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
 
-.PHONY:	all clean dev download edit editor work test cpu mem short-test bench cover
+.PHONY:	all clean dev download edit editor work test cpu mem short-test benchmark cover
 
 all: editor
 	golint 2>&1
 	staticcheck 2>&1
 
-bench:
-	go test -run @ -bench . 2>&1 | tee log-bench
+benchmark:
+	go test -timeout 24h -run @ -bench . 2>&1 | tee log-benchmark
 
 clean:
 	rm -f log-* cpu.test mem.test *.out go.work*
@@ -17,7 +17,7 @@ clean:
 
 edit:
 	@touch log
-	@if [ -f "Session.vim" ]; then gvim -S & else gvim -p Makefile go.mod builder.json all_test.go quickjs.go & fi
+	@if [ -f "Session.vim" ]; then gvim -S & else gvim -p Makefile go.mod builder.json all_test.go examples_test.go quickjs.go & fi
 
 editor:
 	gofmt -l -s -w . 2>&1 | tee log-editor
