@@ -4,41 +4,29 @@
 
 package quickjs // import "modernc.org/quickjs"
 
-// Disabled for now. Turns out the original C libray is not thread safe.
+import (
+	"fmt"
+)
 
-//TODO generate libquickjs while moving all items with storage class 'static'
-// to an instance, like was done in libqbe.
+// Multiple concurrent Javascript virtual machines communicating via Go channels.
+func Example_ping() {
+	m1, _ := NewVM()
+	defer m1.Close()
+	m2, _ := NewVM()
+	defer m2.Close()
+	ch1 := make(chan string, 1)
+	ch2 := make(chan string, 1)
+	registerFuncs(m1, ch1, ch2)
+	registerFuncs(m2, ch2, ch1)
+	go func() {
+		m2.Eval("tx(rx()+' reply');", EvalGlobal)
+	}()
+	fmt.Println(m1.Eval("tx('ping'); rx();", EvalGlobal))
+	// Output:
+	// ping reply <nil>
+}
 
-// import (
-// 	"fmt"
-// 	"sync"
-// )
-//
-// // Multiple VMs communicating using Go channels.
-// func Example_ping() {
-// 	ch := make(chan string, 10)
-// 	m1, _ := NewVM()
-// 	defer m1.Close()
-// 	registerFuncs(m1, ch)
-// 	m2, _ := NewVM()
-// 	defer m2.Close()
-// 	registerFuncs(m2, ch)
-// 	var wg sync.WaitGroup
-// 	wg.Add(2)
-// 	go func() {
-// 		defer wg.Done()
-// 		m2.Eval("tx(rx()+' reply');", EvalGlobal)
-// 	}()
-// 	go func() {
-// 		defer wg.Done()
-// 		fmt.Println(m1.Eval("tx('ping'); rx();", EvalGlobal))
-// 	}()
-// 	wg.Wait()
-// 	// Output:
-// 	// ping reply TOD <nil>
-// }
-//
-// func registerFuncs(m *VM, ch chan string) {
-// 	m.RegisterFunc("tx", func(s string) { ch <- s }, false)
-// 	m.RegisterFunc("rx", func() string { return <-ch }, false)
-// }
+func registerFuncs(m *VM, ch1, ch2 chan string) {
+	m.RegisterFunc("tx", func(s string) { ch1 <- s }, false)
+	m.RegisterFunc("rx", func() string { return <-ch2 }, false)
+}

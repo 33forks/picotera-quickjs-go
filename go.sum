@@ -79,8 +79,8 @@ modernc.org/fileutil v1.3.0/go.mod h1:XatxS8fZi3pS8/hKG2GH/ArUogfxjpEKs3Ku3aK4Jy
 modernc.org/gc/v2 v2.4.1 h1:9cNzOqPyMJBvrUipmynX0ZohMhcxPtMccYgGOJdOiBw=
 modernc.org/libc v1.50.2 h1:I0+3wlRvXmAEjAJvD7BhP1kmKHwkzV0rOcqFcD85u+0=
 modernc.org/libc v1.50.2/go.mod h1:Fd8TZdfRorOd1vB0QCtYSHYAuzobS4xS3mhMGUkeVcA=
-modernc.org/libquickjs v0.5.0 h1:qHhIuZvIrGwR3yyr8At3/WMCg0MngURKUzgrcc3VFYg=
-modernc.org/libquickjs v0.5.0/go.mod h1:7rt2m2bf5H0aXFgmOOuxyaKSYcMSafZoCdbnvI3S56k=
+modernc.org/libquickjs v0.6.0 h1:lN8oaMv7C9YuXFC/kJjd9pYsMkmgv6WvxAk56IwAdLE=
+modernc.org/libquickjs v0.6.0/go.mod h1:9REb79R7RAm5QTi/z4/JA4eL76A0MFVwzvYch6TQkEA=
 modernc.org/mathutil v1.6.0 h1:fRe9+AmYlaej+64JsEEhoWuAYBkOtQiMEU7n/XgfYi4=
 modernc.org/mathutil v1.6.0/go.mod h1:Ui5Q9q1TR2gFm0AQRqQUaBWFLAhQpCwNcuhBOSedWPo=
 modernc.org/memory v1.8.0 h1:IqGTL6eFMaDZZhEWwcREgeMXYwmW83LYW8cROZYkg+E=

@@ -44,6 +44,14 @@
 // [modernc.org/libquickjs]: https://pkg.go.dev/modernc.org/libquickjs
 package quickjs // import "modernc.org/quickjs"
 
+// BUG(jnml)
+// Currently the race detector reports:
+//
+//	fatal error: checkptr: pointer arithmetic result points to invalid allocation
+//
+// But the pointer in question seems to be valid. Needs more investigation to
+// figure out if it's a false positive or not before release.
+
 import (
 	"encoding/json"
 	"fmt"
@@ -78,23 +86,28 @@ var (
 type runtime struct {
 	cRuntime uintptr // lib.TJSRuntime
 	tls      *libc.TLS
+	qjs      *lib.Library
 }
 
 // newRuntime returns a newly create Runtime
-func newRuntime() (*runtime, error) {
+func newRuntime(qjs *lib.Library) (*runtime, error) {
 	tls := libc.NewTLS()
-	r := lib.XJS_NewRuntime(tls)
+	r := lib.XJS_NewRuntime(tls, qjs)
 	if r == 0 {
 		tls.Close()
 		return nil, fmt.Errorf("failed to create a new Javascript runtime")
 	}
 
-	return &runtime{cRuntime: r, tls: tls}, nil
+	return &runtime{
+		cRuntime: r,
+		tls:      tls,
+		qjs:      qjs,
+	}, nil
 }
 
 // close releases the resources held by r.
 func (r *runtime) close() error {
-	lib.XJS_FreeRuntime(r.tls, r.cRuntime)
+	lib.XJS_FreeRuntime(r.tls, r.qjs, r.cRuntime)
 	r.tls.Close()
 	*r = runtime{}
 	return nil
@@ -107,15 +120,16 @@ func (r *runtime) newVM() (*VM, error) {
 		return nil, fmt.Errorf("OOM")
 	}
 
-	c := lib.XJS_NewContext(r.tls, r.cRuntime)
+	c := lib.XJS_NewContext(r.tls, r.qjs, r.cRuntime)
 	if c == 0 {
 		return nil, fmt.Errorf("failed to create a new Javascript context")
 	}
 
 	return &VM{
 		cContext:     c,
-		int32_2:      lib.XNewInt32(r.tls, c, 2),
-		int32_16:     lib.XNewInt32(r.tls, c, 16),
+		int32_2:      lib.XNewInt32(r.tls, r.qjs, c, 2),
+		int32_16:     lib.XNewInt32(r.tls, r.qjs, c, 16),
+		qjs:          r.qjs,
 		runtime:      r,
 		toStringArgv: argv,
 	}, nil
@@ -140,7 +154,7 @@ func (m *VM) newString(s string) (r lib.TJSValue) {
 
 	defer libc.Xfree(tls, p)
 
-	return lib.XJS_NewStringLen(tls, ctx, p, lib.Tsize_t(len(s)))
+	return lib.XJS_NewStringLen(tls, m.qjs, ctx, p, lib.Tsize_t(len(s)))
 }
 
 func newBool(n bool) (r lib.TJSValue) {
@@ -189,7 +203,7 @@ func (m *VM) parseJSON(s string, flags int32) (r lib.TJSValue, err error) {
 
 	defer libc.Xfree(tls, cs)
 
-	r = lib.XJS_ParseJSON2(tls, ctx, cs, lib.Tsize_t(len(s)), jsonFN, flags)
+	r = lib.XJS_ParseJSON2(tls, m.qjs, ctx, cs, lib.Tsize_t(len(s)), jsonFN, flags)
 	if isException(r) {
 		err = m.errFromException()
 	}
@@ -225,17 +239,23 @@ func (o *Object) MarshalJSON() (r []byte, err error) {
 // Note: VM is not safe for concurrent use by multiple goroutines.
 type VM struct {
 	// Safe to share, not reference counted
-	int32_2      lib.TJSValue
-	int32_16     lib.TJSValue
 	cContext     uintptr // lib.TJSContext
 	goFuncs      map[string]int32
+	int32_16     lib.TJSValue
+	int32_2      lib.TJSValue
+	qjs          *lib.Library
 	runtime      *runtime
 	toStringArgv uintptr
 }
 
 // NewVM returns a newly created VM.
 func NewVM() (*VM, error) {
-	r, err := newRuntime()
+	qjs, err := lib.NewLibrary()
+	if err != nil {
+		return nil, err
+	}
+
+	r, err := newRuntime(qjs)
 	if err != nil {
 		return nil, err
 	}
@@ -246,6 +266,7 @@ func NewVM() (*VM, error) {
 // Close releases the resources held by 'm'.
 func (m *VM) Close() error {
 	tls := m.runtime.tls
+	ctx := m.cContext
 	var a []int32
 	var b []*goFunc
 	for _, k := range m.goFuncs {
@@ -265,7 +286,7 @@ func (m *VM) Close() error {
 	}
 
 	libc.Xfree(tls, m.toStringArgv)
-	lib.XJS_FreeContext(m.runtime.tls, m.cContext)
+	lib.XJS_FreeContext(tls, m.qjs, ctx)
 	r := m.runtime
 	*m = VM{}
 	return r.close()
@@ -297,6 +318,7 @@ var evalFN = [...]byte{'<', 'e', 'v', 'a', 'l', '>', 0}
 //	any other type          Unsupported                             nil
 func (m *VM) Eval(javascript string, flags int) (r any, err error) {
 	tls := m.runtime.tls
+	ctx := m.cContext
 	ps, err := libc.CString(javascript)
 	if err != nil {
 		panic(err)
@@ -304,7 +326,7 @@ func (m *VM) Eval(javascript string, flags int) (r any, err error) {
 
 	defer libc.Xfree(tls, ps)
 
-	return m.value(lib.XJS_Eval(tls, m.cContext, ps, libc.Tsize_t(len(javascript)), uintptr(unsafe.Pointer(&evalFN)), int32(flags)), true)
+	return m.value(lib.XJS_Eval(tls, m.qjs, ctx, ps, libc.Tsize_t(len(javascript)), uintptr(unsafe.Pointer(&evalFN)), int32(flags)), true)
 }
 
 func (m *VM) eval(js string, flags int) lib.TJSValue {
@@ -317,11 +339,11 @@ func (m *VM) eval(js string, flags int) lib.TJSValue {
 
 	defer libc.Xfree(tls, ps)
 
-	return lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(js)), uintptr(unsafe.Pointer(&evalFN)), int32(flags))
+	return lib.XJS_Eval(tls, m.qjs, ctx, ps, libc.Tsize_t(len(js)), uintptr(unsafe.Pointer(&evalFN)), int32(flags))
 }
 
 func (m *VM) globalObject() lib.TJSValue {
-	return lib.XJS_GetGlobalObject(m.runtime.tls, m.cContext)
+	return lib.XJS_GetGlobalObject(m.runtime.tls, m.qjs, m.cContext)
 }
 
 // Call evaluates 'function(args...)' and returns the resulting (value, error).
@@ -352,13 +374,13 @@ func (m *VM) Call(function string, args ...any) (r any, err error) {
 
 	defer libc.Xfree(tls, ps)
 
-	f := lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(function)), uintptr(unsafe.Pointer(&evalFN)), int32(EvalGlobal))
+	f := lib.XJS_Eval(tls, m.qjs, ctx, ps, libc.Tsize_t(len(function)), uintptr(unsafe.Pointer(&evalFN)), int32(EvalGlobal))
 
-	defer lib.XFreeValue(tls, ctx, f)
+	defer lib.XFreeValue(tls, m.qjs, ctx, f)
 
 	g := m.globalObject()
 
-	defer lib.XFreeValue(tls, ctx, g)
+	defer lib.XFreeValue(tls, m.qjs, ctx, g)
 
 	return m.call(f, g, args...)
 }
@@ -366,7 +388,7 @@ func (m *VM) Call(function string, args ...any) (r any, err error) {
 func (m *VM) call(f, this lib.TJSValue, args ...any) (r any, err error) {
 	tls := m.runtime.tls
 	ctx := m.cContext
-	if lib.XJS_IsFunction(tls, ctx, f) == 0 {
+	if lib.XJS_IsFunction(tls, m.qjs, ctx, f) == 0 {
 		return nil, fmt.Errorf("cannot call a non-function")
 	}
 
@@ -432,30 +454,30 @@ func (m *VM) call(f, this lib.TJSValue, args ...any) (r any, err error) {
 
 			defer libc.Xfree(tls, p)
 
-			jv := lib.XJS_NewStringLen(tls, ctx, p, libc.Tsize_t(len(x)))
+			jv := lib.XJS_NewStringLen(tls, m.qjs, ctx, p, libc.Tsize_t(len(x)))
 
-			defer lib.XFreeValue(tls, ctx, jv)
+			defer lib.XFreeValue(tls, m.qjs, ctx, jv)
 
 			jsArgs = append(jsArgs, jv)
 		case *big.Int:
 			s := x.String() + "n"
 			jv := m.eval(s, EvalGlobal)
 
-			defer lib.XFreeValue(tls, ctx, jv)
+			defer lib.XFreeValue(tls, m.qjs, ctx, jv)
 
 			jsArgs = append(jsArgs, jv)
 		case *big.Float:
 			s := fmt.Sprintf("BigFloat('%s')", x.String())
 			jv := m.eval(s, EvalGlobal)
 
-			defer lib.XFreeValue(tls, ctx, jv)
+			defer lib.XFreeValue(tls, m.qjs, ctx, jv)
 
 			jsArgs = append(jsArgs, jv)
 		case decimal.Decimal:
 			s := x.String() + "m"
 			jv := m.eval(s, EvalGlobal)
 
-			defer lib.XFreeValue(tls, ctx, jv)
+			defer lib.XFreeValue(tls, m.qjs, ctx, jv)
 
 			jsArgs = append(jsArgs, jv)
 		default:
@@ -471,9 +493,9 @@ func (m *VM) call(f, this lib.TJSValue, args ...any) (r any, err error) {
 
 			defer libc.Xfree(tls, p)
 
-			jv := lib.XJS_ParseJSON(tls, ctx, p, libc.Tsize_t(len(b)), uintptr(unsafe.Pointer(&evalFN)))
+			jv := lib.XJS_ParseJSON(tls, m.qjs, ctx, p, libc.Tsize_t(len(b)), uintptr(unsafe.Pointer(&evalFN)))
 
-			defer lib.XFreeValue(tls, ctx, jv)
+			defer lib.XFreeValue(tls, m.qjs, ctx, jv)
 
 			jsArgs = append(jsArgs, jv)
 		}
@@ -491,19 +513,19 @@ func (m *VM) call(f, this lib.TJSValue, args ...any) (r any, err error) {
 		}
 
 	}
-	return m.value(lib.XJS_Call(tls, ctx, f, this, int32(len(jsArgs)), argv), true)
+	return m.value(lib.XJS_Call(tls, m.qjs, ctx, f, this, int32(len(jsArgs)), argv), true)
 }
 
 func (m *VM) newObject(v lib.TJSValue) *Object {
 	tls := m.runtime.tls
 	ctx := m.cContext
-	json := lib.XJS_JSONStringify(tls, ctx, v, undefined, undefined)
+	json := lib.XJS_JSONStringify(tls, m.qjs, ctx, v, undefined, undefined)
 
-	defer lib.XFreeValue(tls, ctx, json)
+	defer lib.XFreeValue(tls, m.qjs, ctx, json)
 
-	p := lib.XToCString(tls, ctx, json)
+	p := lib.XToCString(tls, m.qjs, ctx, json)
 
-	defer lib.XJS_FreeCString(tls, ctx, p)
+	defer lib.XJS_FreeCString(tls, m.qjs, ctx, p)
 
 	return &Object{json: libc.GoString(p)}
 }
@@ -520,25 +542,25 @@ func (m *VM) value(v lib.TJSValue, free bool) (r any, err error) {
 	ctx := m.cContext
 	if free && v.Ftag < 0 {
 		// all tags with a reference count are negative
-		defer lib.XFreeValue(tls, ctx, v)
+		defer lib.XFreeValue(tls, m.qjs, ctx, v)
 	}
 
 	switch v.Ftag {
 	case lib.EJS_TAG_BIG_DECIMAL: // -11,
-		ps := lib.XJS_GetPropertyStr(tls, ctx, v, toString)
+		ps := lib.XJS_GetPropertyStr(tls, m.qjs, ctx, v, toString)
 		if ps.Ftag != lib.EJS_TAG_OBJECT {
 			panic("failed to get BigDecimal.toString()")
 		}
 
-		defer lib.XFreeValue(tls, ctx, ps)
+		defer lib.XFreeValue(tls, m.qjs, ctx, ps)
 
-		jsString := lib.XJS_Call(tls, ctx, ps, v, 0, m.toStringArgv)
+		jsString := lib.XJS_Call(tls, m.qjs, ctx, ps, v, 0, m.toStringArgv)
 
-		defer lib.XFreeValue(tls, ctx, jsString)
+		defer lib.XFreeValue(tls, m.qjs, ctx, jsString)
 
-		p := lib.XToCString(tls, ctx, jsString)
+		p := lib.XToCString(tls, m.qjs, ctx, jsString)
 
-		defer lib.XJS_FreeCString(tls, ctx, p)
+		defer lib.XJS_FreeCString(tls, m.qjs, ctx, p)
 
 		n, err := decimal.NewFromString(libc.GoString(p))
 		if err != nil {
@@ -547,21 +569,21 @@ func (m *VM) value(v lib.TJSValue, free bool) (r any, err error) {
 
 		return n, nil
 	case lib.EJS_TAG_BIG_INT: // -10,
-		ps := lib.XJS_GetPropertyStr(tls, ctx, v, toString)
+		ps := lib.XJS_GetPropertyStr(tls, m.qjs, ctx, v, toString)
 		if ps.Ftag != lib.EJS_TAG_OBJECT {
 			panic("failed to get BigInt.toString()")
 		}
 
-		defer lib.XFreeValue(tls, ctx, ps)
+		defer lib.XFreeValue(tls, m.qjs, ctx, ps)
 
 		*(*lib.TJSValue)(unsafe.Pointer(m.toStringArgv)) = m.int32_16
-		jsString := lib.XJS_Call(tls, ctx, ps, v, 1, m.toStringArgv)
+		jsString := lib.XJS_Call(tls, m.qjs, ctx, ps, v, 1, m.toStringArgv)
 
-		defer lib.XFreeValue(tls, ctx, jsString)
+		defer lib.XFreeValue(tls, m.qjs, ctx, jsString)
 
-		p := lib.XToCString(tls, ctx, jsString)
+		p := lib.XToCString(tls, m.qjs, ctx, jsString)
 
-		defer lib.XJS_FreeCString(tls, ctx, p)
+		defer lib.XJS_FreeCString(tls, m.qjs, ctx, p)
 
 		n := big.NewInt(0)
 		if _, ok := n.SetString(libc.GoString(p), 16); !ok {
@@ -570,21 +592,21 @@ func (m *VM) value(v lib.TJSValue, free bool) (r any, err error) {
 
 		return n, nil
 	case lib.EJS_TAG_BIG_FLOAT: // -9,
-		ps := lib.XJS_GetPropertyStr(tls, ctx, v, toString)
+		ps := lib.XJS_GetPropertyStr(tls, m.qjs, ctx, v, toString)
 		if ps.Ftag != lib.EJS_TAG_OBJECT {
 			panic("failed to get BigInt.toString()")
 		}
 
-		defer lib.XFreeValue(tls, ctx, ps)
+		defer lib.XFreeValue(tls, m.qjs, ctx, ps)
 
 		*(*lib.TJSValue)(unsafe.Pointer(m.toStringArgv)) = m.int32_16
-		jsString := lib.XJS_Call(tls, ctx, ps, v, 1, m.toStringArgv)
+		jsString := lib.XJS_Call(tls, m.qjs, ctx, ps, v, 1, m.toStringArgv)
 
-		defer lib.XFreeValue(tls, ctx, jsString)
+		defer lib.XFreeValue(tls, m.qjs, ctx, jsString)
 
-		p := lib.XToCString(tls, ctx, jsString)
+		p := lib.XToCString(tls, m.qjs, ctx, jsString)
 
-		defer lib.XJS_FreeCString(tls, ctx, p)
+		defer lib.XJS_FreeCString(tls, m.qjs, ctx, p)
 
 		s := libc.GoString(p)
 		n := big.NewFloat(0)
@@ -595,9 +617,9 @@ func (m *VM) value(v lib.TJSValue, free bool) (r any, err error) {
 
 		return n, nil
 	case lib.EJS_TAG_STRING: // -7,
-		p := lib.XToCString(tls, ctx, v)
+		p := lib.XToCString(tls, m.qjs, ctx, v)
 
-		defer lib.XJS_FreeCString(tls, ctx, p)
+		defer lib.XJS_FreeCString(tls, m.qjs, ctx, p)
 
 		return libc.GoString(p), nil
 	case lib.EJS_TAG_OBJECT: // -1
@@ -621,25 +643,25 @@ func (m *VM) value(v lib.TJSValue, free bool) (r any, err error) {
 func (m *VM) errFromException() error {
 	tls := m.runtime.tls
 	ctx := m.cContext
-	e := lib.XJS_GetException(tls, ctx)
+	e := lib.XJS_GetException(tls, m.qjs, ctx)
 
-	defer lib.XFreeValue(tls, ctx, e)
+	defer lib.XFreeValue(tls, m.qjs, ctx, e)
 
-	p := lib.XToCString(tls, ctx, e)
+	p := lib.XToCString(tls, m.qjs, ctx, e)
 
-	defer lib.XJS_FreeCString(tls, ctx, p)
+	defer lib.XJS_FreeCString(tls, m.qjs, ctx, p)
 
 	return fmt.Errorf("%s", libc.GoString(p))
 }
 
 // AddIntrinsicBigFloat adds the BigFloat object to 'm'.
 func (m *VM) AddIntrinsicBigFloat() {
-	lib.XJS_AddIntrinsicBigFloat(m.runtime.tls, m.cContext)
+	lib.XJS_AddIntrinsicBigFloat(m.runtime.tls, m.qjs, m.cContext)
 }
 
 // AddIntrinsicBigDecimal adds the BigDecimal object to 'm'.
 func (m *VM) AddIntrinsicBigDecimal() {
-	lib.XJS_AddIntrinsicBigDecimal(m.runtime.tls, m.cContext)
+	lib.XJS_AddIntrinsicBigDecimal(m.runtime.tls, m.qjs, m.cContext)
 }
 
 var (
@@ -651,7 +673,7 @@ var (
 func (m *VM) InitModuleStd() error {
 	tls := m.runtime.tls
 	ctx := m.cContext
-	if lib.Xjs_init_module_std(tls, ctx, std) == 0 {
+	if lib.Xjs_init_module_std(tls, m.qjs, ctx, std) == 0 {
 		return fmt.Errorf("module initialization failed")
 	}
 
@@ -662,11 +684,11 @@ func (m *VM) InitModuleStd() error {
 func (m *VM) AddStdHelpers() error {
 	tls := m.runtime.tls
 	ctx := m.cContext
-	lib.Xjs_std_add_helpers(tls, ctx, -1, 0)
+	lib.Xjs_std_add_helpers(tls, m.qjs, ctx, -1, 0)
 	return nil
 }
 
-func throwTypeError(tls *libc.TLS, ctx uintptr, msg string, args ...any) lib.TJSValue {
+func throwTypeError(tls *libc.TLS, qjs *lib.Library, ctx uintptr, msg string, args ...any) lib.TJSValue {
 	bp := tls.Alloc(8 + 8*len(args))
 
 	defer tls.Free(8 + 8*len(args))
@@ -675,10 +697,10 @@ func throwTypeError(tls *libc.TLS, ctx uintptr, msg string, args ...any) lib.TJS
 
 	defer libc.Xfree(tls, p)
 
-	return lib.XJS_ThrowTypeError(tls, ctx, p, libc.VaList(bp+8, args...))
+	return lib.XJS_ThrowTypeError(tls, qjs, ctx, p, libc.VaList(bp+8, args...))
 }
 
-func throwInternalError(tls *libc.TLS, ctx uintptr, msg string, args ...any) lib.TJSValue {
+func throwInternalError(tls *libc.TLS, qjs *lib.Library, ctx uintptr, msg string, args ...any) lib.TJSValue {
 	bp := tls.Alloc(8 + 8*len(args))
 
 	defer tls.Free(8 + 8*len(args))
@@ -687,7 +709,7 @@ func throwInternalError(tls *libc.TLS, ctx uintptr, msg string, args ...any) lib
 
 	defer libc.Xfree(tls, p)
 
-	return lib.XJS_ThrowInternalError(tls, ctx, p, libc.VaList(bp+8, args...))
+	return lib.XJS_ThrowInternalError(tls, qjs, ctx, p, libc.VaList(bp+8, args...))
 }
 
 func mustCString(s string) uintptr {
@@ -732,10 +754,10 @@ type goFunc struct {
 // Go non-nil errors are converted to Javascript strings using the Error()
 // method.
 //
-// Any Go -> Javascript or Javascript -> Go type conversion between arguments
-// and return values that fails throws a Javascript exception.
+// Any Go <-> Javascript failing type conversion between arguments/return
+// values throws a Javascript type error exception.
 //
-// There is a process-wide limit on the total number of currently registered Go
+// There is a limit on the total number of currently registered Go
 // functions.
 //
 // Note: The 'name' argument should be a valid Javascript identifier. It is not
@@ -830,7 +852,7 @@ func (m *VM) RegisterFunc(name string, f any, wantThis bool) (err error) {
 
 	g := m.globalObject()
 
-	defer lib.XFreeValue(tls, ctx, g)
+	defer lib.XFreeValue(tls, m.qjs, ctx, g)
 
 	(*lib.TJSCFunctionListEntry)(unsafe.Pointer(tab)).Fname = cName
 	(*lib.TJSCFunctionListEntry)(unsafe.Pointer(tab)).Fprop_flags = lib.MJS_PROP_WRITABLE | lib.MJS_PROP_CONFIGURABLE
@@ -839,7 +861,7 @@ func (m *VM) RegisterFunc(name string, f any, wantThis bool) (err error) {
 	(*lib.TJSCFunctionListEntry)(unsafe.Pointer(tab)).Fu.Ffunc1.Flength = uint8(argc)
 	(*lib.TJSCFunctionListEntry)(unsafe.Pointer(tab)).Fu.Ffunc1.Fcproto = lib.EJS_CFUNC_generic_magic
 	(*lib.TJSCFunctionListEntry)(unsafe.Pointer(tab)).Fu.Ffunc1.Fcfunc.Fgeneric = fp(callGo)
-	lib.XJS_SetPropertyFunctionList(tls, ctx, g, tab, 1)
+	lib.XJS_SetPropertyFunctionList(tls, m.qjs, ctx, g, tab, 1)
 	return nil
 }
 
@@ -849,13 +871,13 @@ func fp(f interface{}) uintptr {
 }
 
 // typedef JSValue JSCFunctionMagic(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic);
-func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uintptr, magic int32) (r lib.TJSValue) {
+func callGo(tls *libc.TLS, qjs *lib.Library, ctx uintptr, this lib.TJSValue, argc int32, argv uintptr, magic int32) (r lib.TJSValue) {
 	goFuncsMu.Lock()
 	info := goFuncs[magic]
 	goFuncsMu.Unlock()
 
 	if info == nil {
-		return throwInternalError(tls, ctx, "callback id=%i not registered", magic)
+		return throwInternalError(tls, qjs, ctx, "callback id=%i not registered", magic)
 	}
 
 	m := info.vm
@@ -868,12 +890,12 @@ func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uint
 	}
 	if haveArgs < info.minArgs {
 		// trc("wantThis=%v haveArgs=%v minArgs=%v maxArgs=%v argc=%v", info.wantThis, haveArgs, info.minArgs, info.maxArgs, argc)
-		return throwTypeError(tls, ctx, fmt.Sprintf("not enough arguments in call to %s", info.name))
+		return throwTypeError(tls, m.qjs, ctx, fmt.Sprintf("not enough arguments in call to %s", info.name))
 	}
 
 	if info.maxArgs >= 0 && haveArgs > info.maxArgs {
 		// trc("wantThis=%v haveArgs=%v minArgs=%v maxArgs=%v argc=%v", info.wantThis, haveArgs, info.minArgs, info.maxArgs, argc)
-		return throwTypeError(tls, ctx, fmt.Sprintf("too many arguments in call to %s", info.name))
+		return throwTypeError(tls, m.qjs, ctx, fmt.Sprintf("too many arguments in call to %s", info.name))
 	}
 
 	var in []reflect.Value
@@ -881,12 +903,12 @@ func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uint
 	if info.wantThis {
 		v, err := m.value(this, false)
 		if err != nil {
-			return throwTypeError(tls, ctx, fmt.Sprintf("calling %s: argument conversion error: %v", info.name, err))
+			return throwTypeError(tls, m.qjs, ctx, fmt.Sprintf("calling %s: argument conversion error: %v", info.name, err))
 		}
 
 		rv := reflect.ValueOf(v)
 		if !rv.Type().AssignableTo(info.in[0]) {
-			return throwTypeError(tls, ctx, fmt.Sprintf("calling %s: cannot assign %s to %s", info.name, rv.Type(), info.in[0]))
+			return throwTypeError(tls, m.qjs, ctx, fmt.Sprintf("calling %s: cannot assign %s to %s", info.name, rv.Type(), info.in[0]))
 		}
 
 		in = append(in, rv)
@@ -904,12 +926,12 @@ func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uint
 		}
 		v, err := m.value(*(*lib.TJSValue)(unsafe.Pointer(argv)), false)
 		if err != nil {
-			return throwTypeError(tls, ctx, fmt.Sprintf("calling %s: argument conversion error: %v", info.name, err))
+			return throwTypeError(tls, m.qjs, ctx, fmt.Sprintf("calling %s: argument conversion error: %v", info.name, err))
 		}
 
 		rv := reflect.ValueOf(v)
 		if !rv.Type().AssignableTo(typ) {
-			return throwTypeError(tls, ctx, fmt.Sprintf("calling %s: cannot assign %s to %s", info.name, rv.Type(), info.in[0]))
+			return throwTypeError(tls, m.qjs, ctx, fmt.Sprintf("calling %s: cannot assign %s to %s", info.name, rv.Type(), info.in[0]))
 		}
 
 		in = append(in, rv)
@@ -927,7 +949,7 @@ func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uint
 		r, err = m.jsArray(out)
 	}
 	if err != nil {
-		return throwTypeError(tls, ctx, fmt.Sprintf("callback %s: %v", info.name, err))
+		return throwTypeError(tls, m.qjs, ctx, fmt.Sprintf("callback %s: %v", info.name, err))
 	}
 
 	return r
@@ -1039,12 +1061,12 @@ func (m *VM) jsArrayOf(a []lib.TJSValue) (out lib.TJSValue, err error) {
 		*(*lib.TJSValue)(unsafe.Pointer(p)) = v
 		p += sz
 	}
-	out = lib.ArrayOf(tls, ctx, int32(len(a)), argv)
+	out = m.qjs.ArrayOf(tls, ctx, int32(len(a)), argv)
 	if isException(out) {
 		err = m.errFromException()
 	}
 	for _, v := range a {
-		lib.XFreeValue(tls, ctx, v)
+		lib.XFreeValue(tls, m.qjs, ctx, v)
 	}
 	return out, err
 }
