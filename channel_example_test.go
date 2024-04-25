@@ -10,23 +10,23 @@ import (
 
 // Multiple concurrent Javascript virtual machines communicating via Go channels.
 func Example_ping() {
-	m1, _ := NewVM()
-	defer m1.Close()
-	m2, _ := NewVM()
-	defer m2.Close()
-	ch1 := make(chan string, 1)
-	ch2 := make(chan string, 1)
-	registerFuncs(m1, ch1, ch2)
-	registerFuncs(m2, ch2, ch1)
-	go func() {
-		m2.Eval("tx(rx()+' reply');", EvalGlobal)
+	client, _ := NewVM()
+	defer client.Close()
+	tx := make(chan string, 1)
+	rx := make(chan string, 1)
+	registerFuncs(client, tx, rx)
+	go func() { // Start the server.
+		server, _ := NewVM()
+		defer server.Close()
+		registerFuncs(server, rx, tx)
+		server.Eval("send(receive()+' reply');", EvalGlobal)
 	}()
-	fmt.Println(m1.Eval("tx('ping'); rx();", EvalGlobal))
+	fmt.Println(client.Eval("send('ping'); receive();", EvalGlobal)) // Ping the server.
 	// Output:
 	// ping reply <nil>
 }
 
-func registerFuncs(m *VM, ch1, ch2 chan string) {
-	m.RegisterFunc("tx", func(s string) { ch1 <- s }, false)
-	m.RegisterFunc("rx", func() string { return <-ch2 }, false)
+func registerFuncs(m *VM, tx, rx chan string) {
+	m.RegisterFunc("send", func(s string) { tx <- s }, false)
+	m.RegisterFunc("receive", func() string { return <-rx }, false)
 }

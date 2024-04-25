@@ -175,5 +175,5 @@ func ExampleVM_RegisterFunc_void() {
 	fmt.Println(m.Eval("gofunc(2, 3, 5)", EvalGlobal))
 	// Output:
 	// 17
-	// {} <nil>
+	// undefined <nil>
 }
