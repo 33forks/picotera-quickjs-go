@@ -22,16 +22,19 @@ https://modern-c.appspot.com/-/builder/?importpath=modernc.org%2fquickjs
 
 # Performance
 
-This package vs https://pkg.go.dev/github.com/dop251/goja
+This package @ v0.8.0
 
+vs https://pkg.go.dev/github.com/dop251/goja @v0.0.0-20240220182346-e401ed450204
+
+    go test -timeout 24h -run @ -bench . 2>&1 | tee log-benchmark
     goos: linux
     goarch: amd64
     pkg: modernc.org/quickjs
-    cpu: AMD Ryzen 9 3900X 12-Core Processor
-    BenchmarkArewefastyet/ccgo-24    1    114833264962 ns/op          22808 B/op            70 allocs/op
-    BenchmarkArewefastyet/goja-24    1    188090359173 ns/op    28283063392 B/op    1771005768 allocs/op
+    cpu: AMD Ryzen 9 3900X 12-Core Processor            
+    BenchmarkArewefastyet/ccgo-24    1    115820232777 ns/op          22680 B/op            67 allocs/op
+    BenchmarkArewefastyet/goja-24    1    184796170244 ns/op    28111172328 B/op    1755493570 allocs/op
     PASS
-    ok  modernc.org/quickjs 302.936s
+    ok  modernc.org/quickjs 300.630s
 
 # Notes
 
