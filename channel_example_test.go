@@ -10,10 +10,10 @@ import (
 
 // Multiple concurrent Javascript virtual machines communicating via Go channels.
 func Example_ping() {
-	client, _ := NewVM()
-	defer client.Close()
 	tx := make(chan string, 1)
 	rx := make(chan string, 1)
+	client, _ := NewVM()
+	defer client.Close()
 	registerFuncs(client, tx, rx)
 	go func() { // Start the server.
 		server, _ := NewVM()
