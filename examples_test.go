@@ -177,3 +177,43 @@ func ExampleVM_RegisterFunc_void() {
 	// 17
 	// undefined <nil>
 }
+
+// Passing undefined Javascript 'this' to a Go function.
+func ExampleVM_RegisterFunc_thisNull() {
+	m, _ := NewVM()
+	defer m.Close()
+	m.RegisterFunc("gofunc", func(this any) any { return this }, true)
+	fmt.Println(m.Eval("gofunc()", EvalGlobal))
+	// Output:
+	// undefined <nil>
+}
+
+// Passing undefined Javascript 'this' to a Go function.
+func ExampleVM_RegisterFunc_thisNull2() {
+	m, _ := NewVM()
+	defer m.Close()
+	m.RegisterFunc("gofunc", func(this any, n int) (any, int) { return this, 10 * n }, true)
+	fmt.Println(m.Eval("gofunc(42)", EvalGlobal))
+	// Output:
+	// [null,420] <nil>
+}
+
+// Passing Javascript 'this' to a Go function.
+func ExampleVM_RegisterFunc_thisNonNull() {
+	m, _ := NewVM()
+	defer m.Close()
+	m.RegisterFunc("gofunc", func(this any) any { return this }, true)
+	fmt.Println(m.Eval("var obj = { foo: 314, method: gofunc }; obj.method()", EvalGlobal))
+	// Output:
+	// {"foo":314} <nil>
+}
+
+// Passing Javascript 'this' to a Go function.
+func ExampleVM_RegisterFunc_thisNonNull2() {
+	m, _ := NewVM()
+	defer m.Close()
+	m.RegisterFunc("gofunc", func(this any, n int) (any, int) { return this, 10 * n }, true)
+	fmt.Println(m.Eval("var obj = { foo: 314, method: gofunc }; obj.method(42)", EvalGlobal))
+	// Output:
+	// [{"foo":314},420] <nil>
+}

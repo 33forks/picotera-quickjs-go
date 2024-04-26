@@ -878,12 +878,6 @@ func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uint
 
 	m := info.vm
 	haveArgs := int(argc)
-	if info.wantThis {
-		haveArgs--
-		if haveArgs < 0 {
-			haveArgs = 0
-		}
-	}
 	if haveArgs < info.minArgs {
 		// trc("wantThis=%v haveArgs=%v minArgs=%v maxArgs=%v argc=%v", info.wantThis, haveArgs, info.minArgs, info.maxArgs, argc)
 		return throwTypeError(tls, ctx, fmt.Sprintf("not enough arguments in call to %s", info.name))
