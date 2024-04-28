@@ -54,6 +54,8 @@ func todo(s string, args ...interface{}) string {
 }
 
 // trc prints and return caller's position and an optional message tagged with TRC. Output goes to stderr.
+//
+//lint:ignore U1000 debug helper
 func trc(s string, args ...interface{}) string {
 	switch {
 	case s == "":

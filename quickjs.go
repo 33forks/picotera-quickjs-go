@@ -221,8 +221,9 @@ func (u Undefined) String() string {
 // Object represents the value of a Javascript object, but not the javascript
 // object instance itself.
 type Object struct {
-	json               string
-	forceNonComparable []byte
+	json string
+	//lint:ignore U1000 only to enforce non-comparable
+	nonComparable []byte
 }
 
 // String implements fmt.Stringer.
@@ -240,9 +241,9 @@ func (o *Object) MarshalJSON() (r []byte, err error) {
 //
 // Note: VM is not safe for concurrent use by multiple goroutines.
 type VM struct {
+	cContext uintptr // lib.TJSContext
+	goFuncs  map[string]int32
 	// Safe to share, not reference counted
-	cContext     uintptr // lib.TJSContext
-	goFuncs      map[string]int32
 	int32_16     lib.TJSValue
 	int32_2      lib.TJSValue
 	runtime      *runtime

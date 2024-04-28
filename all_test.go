@@ -5,24 +5,23 @@
 package quickjs // import "modernc.org/quickjs"
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"os"
-	goruntime "runtime"
 	"runtime/debug"
 	"testing"
+	"time"
 
 	"github.com/shopspring/decimal"
 	util "modernc.org/fileutil/ccgo"
 )
 
 var (
-	goos   = goruntime.GOOS
-	goarch = goruntime.GOARCH
-
 	memgrind bool
 )
 
+//lint:ignore U1000 debug helper
 func stack() []byte { return debug.Stack() }
 
 func TestMain(m *testing.M) {
@@ -357,7 +356,11 @@ func TestMem(t *testing.T) {
 	}
 
 	if !memgrind {
-		if _, err := util.Shell(nil, "go", "test", fmt.Sprintf("-short=%v", testing.Short()), "-v", "-tags", "libc.memgrind", "-timeout", "12h", "-run", "TestMemgrind"); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Hour)
+
+		defer cancel()
+
+		if _, err := util.Shell(ctx, "go", "test", fmt.Sprintf("-short=%v", testing.Short()), "-v", "-tags", "libc.memgrind", "-timeout", "12h", "-run", "TestMemgrind"); err != nil {
 			t.Fatal(err)
 		}
 	}

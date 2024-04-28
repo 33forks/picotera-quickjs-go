@@ -15,6 +15,26 @@ import (
 	"modernc.org/libc"
 )
 
+const runArewefastyet = `
+BenchmarkSuite.RunSuites({
+	NotifyError: function(name, error) {
+		throw new Error("FAIL "+name+": "+error);
+	}
+});
+`
+
+var arewefastyetJS = []string{
+	"base.js",
+	"richards.js",
+	"deltablue.js",
+	"crypto.js",
+	"raytrace.js",
+	"earley-boyer.js",
+	"regexp.js",
+	"splay.js",
+	"navier-stokes.js",
+}
+
 func init() {
 	memgrind = true
 }
