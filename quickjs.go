@@ -1061,3 +1061,9 @@ func (m *VM) jsArrayOf(a []lib.TJSValue) (out lib.TJSValue, err error) {
 	}
 	return out, err
 }
+
+// SetDefaultModuleLoader will enable loading module using the default module
+// loader.
+func (m *VM) SetDefaultModuleLoader() {
+	lib.XJS_SetModuleLoaderFunc(m.runtime.tls, m.runtime.cRuntime, 0, fp(lib.Xjs_module_loader), 0)
+}
