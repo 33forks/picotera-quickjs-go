@@ -503,3 +503,5 @@ func testRegisterGoFuncOK(t *testing.T) {
 		}
 	}
 }
+
+//TODO Test Dup/Free + memgrind

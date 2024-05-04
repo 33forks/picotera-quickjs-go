@@ -43,6 +43,9 @@
 // Parts of the documentation were copied from the quickjs documentation, see
 // LICENSE-QUICKJS for details.
 //
+// BUG(jnml) TODO: Add Value support to Eval, Call and to the value converter
+// for registered Go functions.
+//
 // [C quickjs]: https://bellard.org/quickjs
 // [modernc.org/libquickjs]: https://pkg.go.dev/modernc.org/libquickjs
 package quickjs // import "modernc.org/quickjs"
@@ -1066,4 +1069,35 @@ func (m *VM) jsArrayOf(a []lib.TJSValue) (out lib.TJSValue, err error) {
 // loader.
 func (m *VM) SetDefaultModuleLoader() {
 	lib.XJS_SetModuleLoaderFunc(m.runtime.tls, m.runtime.cRuntime, 0, fp(lib.Xjs_module_loader), 0)
+}
+
+// Value represents a native Javascript value. Values are reference counted and
+// their lifetime is managed by an independent Javascript garbage collector.
+// To avoid memory corruption/leaks caused by tripping the Javascript GC, a
+// Value must not
+//
+//   - be copied. Use the Dup method instead.
+//   - become unreachable without calling its Free method.
+//   - be used after its Free() method was called.
+//   - outlive its VM.
+//
+// It is recommended to use native Go values instead of Value where possible.
+type Value struct {
+	vm *VM
+	v  lib.TJSValue
+}
+
+// Dup returns a copy of 'v' while updating its reference count.
+func (v Value) Dup() Value {
+	return Value{
+		vm: v.vm,
+		v:  lib.XDupValue(v.vm.runtime.tls, v.vm.cContext, v.v),
+	}
+}
+
+// Free marks 'v' as no longer used and updates its reference count. 'v' must
+// not be used afterwards.
+func (v *Value) Free() {
+	lib.XFreeValue(v.vm.runtime.tls, v.vm.cContext, v.v)
+	*v = Value{}
 }
