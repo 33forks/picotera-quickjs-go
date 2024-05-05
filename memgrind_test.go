@@ -94,6 +94,7 @@ func TestMemgrind2(t *testing.T) {
 	t.Run("call1", testCall1)
 	t.Run("call2", testCall2)
 	t.Run("call3", testCall3)
+	t.Run("call4", testCall4)
 	t.Run("fnFail", testRegisterGoFuncMustFail)
 	t.Run("fnOK", testRegisterGoFuncOK)
 	t.Run("evalValue", TestEvalValue)

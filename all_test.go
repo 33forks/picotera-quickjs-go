@@ -160,6 +160,7 @@ func TestCall0(t *testing.T) {
 	t.Run("call1", testCall1)
 	t.Run("call2", testCall2)
 	t.Run("call3", testCall3)
+	t.Run("call4", testCall4)
 }
 
 func testCall1(t *testing.T) {
@@ -319,6 +320,38 @@ func testCall3(t *testing.T) {
 		default:
 			panic(todo("%T", x))
 		}
+	}
+}
+
+func testCall4(t *testing.T) {
+	m, err := NewVM()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer m.Close()
+
+	v, err := m.EvalValue(`
+function f(o) {
+	return o.a;
+}
+
+obj = {a:42};
+obj;
+`, EvalGlobal)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer v.Free()
+
+	w, err := m.Call("f", v)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if g, e := w, 42; g != e {
+		t.Fatal(g, e)
 	}
 }
 

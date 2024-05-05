@@ -389,6 +389,7 @@ func (m *VM) globalObject() lib.TJSValue {
 //	*math/big.Float                         BigFloat
 //	github.com/shopspring/decimal.Decimal   BigDecimal
 //	*Object                                 object
+//	Value                                   native Javascript Value
 //	any other type                          object from JSON produced by encoding.json/Marshall(arg)
 func (m *VM) Call(function string, args ...any) (r any, err error) {
 	tls := m.runtime.tls
@@ -423,6 +424,16 @@ func (m *VM) call(f, this lib.TJSValue, args ...any) (r any, err error) {
 		switch x := v.(type) {
 		case nil:
 			jsArgs = append(jsArgs, null)
+		case Value:
+			if x.vm != m && x.v.Ftag < 0 {
+				return nil, fmt.Errorf("cannot use a Value from a different VM")
+			}
+
+			dup := x.Dup().v
+
+			defer lib.XFreeValue(tls, ctx, dup)
+
+			jsArgs = append(jsArgs, dup)
 		case Undefined:
 			jsArgs = append(jsArgs, undefined)
 		case int8:
