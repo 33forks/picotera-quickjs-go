@@ -504,4 +504,18 @@ func testRegisterGoFuncOK(t *testing.T) {
 	}
 }
 
-//TODO Test Dup/Free + memgrind
+func TestEvalValue(t *testing.T) {
+	m, err := NewVM()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer m.Close()
+
+	v, err := m.EvalValue("obj = {foo:42,bar:'baz'}; obj;", EvalGlobal)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer v.Free()
+}

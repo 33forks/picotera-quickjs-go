@@ -43,8 +43,8 @@
 // Parts of the documentation were copied from the quickjs documentation, see
 // LICENSE-QUICKJS for details.
 //
-// BUG(jnml) TODO: Add Value support to Eval, Call and to the value converter
-// for registered Go functions.
+// BUG(jnml) TODO: Add Value support to Call and to the value converter for
+// registered Go functions.
 //
 // [C quickjs]: https://bellard.org/quickjs
 // [modernc.org/libquickjs]: https://pkg.go.dev/modernc.org/libquickjs
@@ -327,6 +327,32 @@ func (m *VM) Eval(javascript string, flags int) (r any, err error) {
 	defer libc.Xfree(tls, ps)
 
 	return m.value(lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(javascript)), uintptr(unsafe.Pointer(&evalFN)), int32(flags)), true)
+}
+
+// EvalValue evaluates a script or module source in 'javascript' and returns
+// the resulting Value, or an error, if any.
+//
+// Exceptions thrown during evaluation of the script are returned as Go errors.
+//
+// If no error is returned, the caller must properly handle the returned Value
+// using Dup/Free.
+func (m *VM) EvalValue(javascript string, flags int) (r Value, err error) {
+	tls := m.runtime.tls
+	ctx := m.cContext
+	ps, err := libc.CString(javascript)
+	if err != nil {
+		panic(err)
+	}
+
+	defer libc.Xfree(tls, ps)
+
+	v := lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(javascript)), uintptr(unsafe.Pointer(&evalFN)), int32(flags))
+	if v.Ftag == lib.EJS_TAG_EXCEPTION {
+		lib.XFreeValue(tls, ctx, v)
+		return r, m.errFromException()
+	}
+
+	return Value{vm: m, v: v}, nil
 }
 
 func (m *VM) eval(js string, flags int) lib.TJSValue {
@@ -1082,6 +1108,44 @@ func (m *VM) SetDefaultModuleLoader() {
 //   - outlive its VM.
 //
 // It is recommended to use native Go values instead of Value where possible.
+//
+// When passing a Value down the call stack use Dup. For example in main
+//
+//	v, _ := EvalValue(someScript)
+//	defer v.Free()
+//	foo(v.Dup()) // Instead of foo(v)
+//
+// In 'foo' Free must be used. For example
+//
+//	func foo(v Value) {
+//		defer v.Free()
+//		...
+//	}
+//
+// This ensures the/only topmost Free marks 'v' eligible for garbage collection.
+//
+// Beware that the correct setup/handling becomes more complicated when using
+// closures, Values are sent through a channel etc. In particular, if a
+// goroutine 1 passes a Dup of 'v' to goroutine 2 and goroutine 1 completes and
+// thus frees 'v' before goroutine 2 completes, the reference counting
+// mechanism will fail. In other words, every Free must be strictly paired with
+// the Dup that preceded obtaining the Value and the Dup/Free calls must
+// respect the original nesting. This is correct.
+//
+//	Dup             // in main
+//		Dup     // in foo
+//		Free    // in foo
+//	Free            // in main
+//
+// This will fail, for example in the above discussed goroutines scenario.
+//
+//	Dup            // in g1
+//		Dup    // in g2
+//	Free           // in g1
+//	        Free   // in g2
+//
+// The fix might be in this case to arrange goroutine 1 to wait for goroutine 2
+// to complete before executing Free in goroutine 1.
 type Value struct {
 	vm *VM
 	v  lib.TJSValue
