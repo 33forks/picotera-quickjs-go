@@ -43,8 +43,8 @@
 // Parts of the documentation were copied from the quickjs documentation, see
 // LICENSE-QUICKJS for details.
 //
-// BUG(jnml) TODO: Add Value support to Call and to the value converter for
-// registered Go functions.
+// BUG(jnml) TODO: Add Value support to the value converter for registered Go
+// functions.
 //
 // [C quickjs]: https://bellard.org/quickjs
 // [modernc.org/libquickjs]: https://pkg.go.dev/modernc.org/libquickjs
