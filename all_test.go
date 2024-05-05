@@ -337,7 +337,7 @@ function f(o) {
 	return o.a;
 }
 
-obj = {a:42};
+obj = {a:42,g:function(){return this;}};
 obj;
 `, EvalGlobal)
 	if err != nil {
@@ -355,14 +355,14 @@ obj;
 		t.Fatal(g, e)
 	}
 
-	x, err := m.CallValue("f", v)
+	x, err := m.CallValue("obj.g", v)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	defer x.Free()
 
-	if g, e := x.v.Ftag, lib.EJS_TAG_INT; g != int64(e) {
+	if g, e := x.v.Ftag, lib.EJS_TAG_OBJECT; g != int64(e) {
 		t.Fatal(g, e)
 	}
 
@@ -371,7 +371,7 @@ obj;
 		t.Fatal(err)
 	}
 
-	if g, e := y, 42; g != e {
+	if g, e := fmt.Sprint(y), `{"obj":{"a":42}}`; g != e {
 		t.Fatal(g, e)
 	}
 }
