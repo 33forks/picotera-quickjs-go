@@ -15,6 +15,7 @@ import (
 
 	"github.com/shopspring/decimal"
 	util "modernc.org/fileutil/ccgo"
+	lib "modernc.org/libquickjs"
 )
 
 var (
@@ -351,6 +352,26 @@ obj;
 	}
 
 	if g, e := w, 42; g != e {
+		t.Fatal(g, e)
+	}
+
+	x, err := m.CallValue("f", v)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer x.Free()
+
+	if g, e := x.v.Ftag, lib.EJS_TAG_INT; g != int64(e) {
+		t.Fatal(g, e)
+	}
+
+	y, err := m.value(x.v, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if g, e := y, 42; g != e {
 		t.Fatal(g, e)
 	}
 }
