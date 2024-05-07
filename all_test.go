@@ -573,3 +573,186 @@ func TestEvalValue(t *testing.T) {
 
 	defer v.Free()
 }
+
+func TestAtom(t *testing.T) {
+	m, err := NewVM()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer m.Close()
+
+	n, err := m.NewAtom("foo")
+	t.Logf("n=%v err=%v", n, err)
+	if n == lib.MJS_ATOM_NULL || err != nil {
+		t.Fatal("FAIL")
+	}
+
+	n2, err := m.NewAtom("bar")
+	t.Logf("n2=%v err=%v", n2, err)
+	if n2 == lib.MJS_ATOM_NULL || n2 == n || err != nil {
+		t.Fatal("FAIL")
+	}
+}
+
+func TestSetPropertyValue(t *testing.T) {
+	m, err := NewVM()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer m.Close()
+
+	obj, err := m.EvalValue("var obj = {}; obj;", EvalGlobal)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer obj.Free()
+
+	atom, err := m.NewAtom("foo")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := m.NewString("bar")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer n.Free()
+
+	if err := m.SetPropertyValue(obj, atom, n); err != nil {
+		t.Fatal(err)
+	}
+
+	v, err := m.Eval("obj.foo;", EvalGlobal)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if g, e := v, "bar"; g != e {
+		t.Fatal(g, e)
+	}
+}
+
+func TestSetProperty(t *testing.T) {
+	m, err := NewVM()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer m.Close()
+
+	obj, err := m.EvalValue("var obj = {}; obj;", EvalGlobal)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer obj.Free()
+
+	atom, err := m.NewAtom("foo")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := m.SetProperty(obj, atom, "bar"); err != nil {
+		t.Fatal(err)
+	}
+
+	v, err := m.Eval("obj.foo;", EvalGlobal)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if g, e := v, "bar"; g != e {
+		t.Fatal(g, e)
+	}
+}
+
+func TestGetPropertyValue(t *testing.T) {
+	m, err := NewVM()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer m.Close()
+
+	obj, err := m.EvalValue("var obj = {}; obj;", EvalGlobal)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer obj.Free()
+
+	atom, err := m.NewAtom("foo")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := m.NewString("bar")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer n.Free()
+
+	if err := m.SetPropertyValue(obj, atom, n); err != nil {
+		t.Fatal(err)
+	}
+
+	v, err := m.GetPropertyValue(obj, atom)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gv, err := m.value(v.v, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if g, e := gv, "bar"; g != e {
+		t.Fatal(g, e)
+	}
+}
+
+func TestGetProperty(t *testing.T) {
+	m, err := NewVM()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer m.Close()
+
+	obj, err := m.EvalValue("var obj = {}; obj;", EvalGlobal)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer obj.Free()
+
+	atom, err := m.NewAtom("foo")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := m.NewString("bar")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer n.Free()
+
+	if err := m.SetPropertyValue(obj, atom, n); err != nil {
+		t.Fatal(err)
+	}
+
+	v, err := m.GetProperty(obj, atom)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if g, e := v, "bar"; g != e {
+		t.Fatal(g, e)
+	}
+}
