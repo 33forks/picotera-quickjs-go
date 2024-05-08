@@ -460,9 +460,19 @@ func testRegisterGoFuncOK(t *testing.T) {
 	m.AddIntrinsicBigFloat()
 	m.AddIntrinsicBigDecimal()
 
-	obj, err := m.Eval("obj = {a: 42, b: 'foo'}; obj;", EvalGlobal)
+	obj, err := m.Eval("obj = {a: 463, b: 'foo'}; obj;", EvalGlobal)
 	if err != nil {
 		t.Fatalf("obj: %v", err)
+	}
+
+	foo, err := m.NewAtom("foo")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type T struct {
+		A int
+		B string
 	}
 
 	for i, test := range []struct {
@@ -481,31 +491,48 @@ func testRegisterGoFuncOK(t *testing.T) {
 		{"", false, func() error { return fmt.Errorf("abc") }, nil, "", "abc"},
 		{"", false, func() error { return nil }, nil, "", nil},
 		{"", false, func() *int { return nil }, nil, "", nil},
-		{"", false, func() any { i := 42; return &i }, nil, "", 42},
-		{"", false, func() *int { i := 42; return &i }, nil, "", 42},
+		{"", false, func() any { i := 495; return &i }, nil, "", 495},
+		{"", false, func() *int { i := 496; return &i }, nil, "", 496},
 		{"", false, func() float64 { return 0.5 }, nil, "", 0.5},
 		{"", false, func() float32 { return 2.5 }, nil, "", 2.5},
 		{"", false, func() string { return "2.5" }, nil, "", "2.5"},
-		{"", false, func() any { return big.NewInt(42) }, nil, "", 42},
-		{"", false, func() *big.Int { return big.NewInt(42) }, nil, "", 42},
+		{"", false, func() any { return big.NewInt(500) }, nil, "", 500},
+		{"", false, func() *big.Int { return big.NewInt(501) }, nil, "", 501},
 		{"", false, func() any { return big.NewFloat(0.5) }, nil, "", 0.5},
 		{"", false, func() *big.Float { return big.NewFloat(0.5) }, nil, "", 0.5},
-		{"", false, func() any { return decimal.NewFromInt(42) }, nil, "", "42"},
-		{"", false, func() decimal.Decimal { return decimal.NewFromInt(42) }, nil, "", "42"},
-		{"", false, func() any { return obj }, nil, "", `{"a":42,"b":"foo"}`},
+		{"", false, func() any { return decimal.NewFromInt(504) }, nil, "", "504"},
+		{"", false, func() decimal.Decimal { return decimal.NewFromInt(505) }, nil, "", "505"},
+		{"", false, func() any { return obj }, nil, "", `{"a":463,"b":"foo"}`},
 		{"", false, func() any { return []any{42, "foo"} }, nil, "", `[42,"foo"]`},
 		{"", false, func() []any { return []any{42, "foo"} }, nil, "", `[42,"foo"]`},
 		{"", false, func() []int { return []int{42, 314} }, nil, "", `[42,314]`},
-		{"", false, func() []any { return []any{42, obj, "foo"} }, nil, "", `[42,{"a":42,"b":"foo"},"foo"]`},
+		{"", false, func() []any { return []any{42, obj, "foo"} }, nil, "", `[42,{"a":463,"b":"foo"},"foo"]`},
 		{"", false, func() (int, string) { return 42, "foo" }, nil, "", `[42,"foo"]`},
 		{"", true, func(any) {}, nil, "", Undefined{}},
-		{"g1", true, func(this any) any { return this }, nil, "var a = {foo: 42, bar: g1}; a.bar();", `{"foo":42}`},
-		{"g2", false, func(in any) any { return in }, nil, "g2(obj)", `{"a":42,"b":"foo"}`},
-		{"g3", false, func(i int, s string) (string, int) { return s, i }, nil, "g3(42, 'foo')", `["foo",42]`},
-		{"g4", false, func(in ...any) []any { return in }, nil, "g4(42, 'foo')", `[42,"foo"]`},
-		{"g5", false, func(s string, args ...any) string { return fmt.Sprintf(s, args...) }, nil, "g5('hello %v %q', 42, 'foo')", `hello 42 "foo"`},
-		{"g6", false, func(in ...any) []any { return in }, nil, "g4()", `[]`},
-		{"g7", false, func(s string, args ...any) string { return fmt.Sprintf(s, args...) }, nil, "g5('hello %v')", `hello %!v(MISSING)`},
+		{"", false, func() any { return T{511, "foo"} }, nil, "", `{"A":511,"B":"foo"}`},
+		{"g1", true, func(this any) any { return this }, nil, "var a = {foo: 512, bar: g1}; a.bar();", `{"foo":512}`},
+		{"g2", false, func(in any) any { return in }, nil, "g2(obj)", `{"a":463,"b":"foo"}`},
+		{"g3", false, func(i int, s string) (string, int) { return s, i }, nil, "g3(514, 'foo')", `["foo",514]`},
+		{"g4", false, func(in ...any) []any { return in }, nil, "g4(515, 'foo')", `[515,"foo"]`},
+		{"g5", false, func(s string, args ...any) string { return fmt.Sprintf(s, args...) }, nil, "g5('hello %v %q', 516, 'foo')", `hello 516 "foo"`},
+		{"g6", false, func(in ...any) []any { return in }, nil, "g6()", `[]`},
+		{"g7", false, func(s string, args ...any) string { return fmt.Sprintf(s, args...) }, nil, "g7('hello %v')", `hello %!v(MISSING)`},
+		{"g8", true, func(this Value) (any, error) {
+			this.SetProperty(foo, 522)
+			return this.Any()
+		}, nil, "var a = {foo: 5220, bar: g8}; a.bar();", `[{"foo":522},null]`},
+		{"g9", false, func(v Value) (any, error) {
+			v.SetProperty(foo, 526)
+			return v.Any()
+		}, nil, "var a = {foo: 5260, bar: g9}; g9(a);", `[{"foo":526},null]`},
+		{"g10", true, func(this Value) Value {
+			this.SetProperty(foo, 530)
+			return this.Dup()
+		}, nil, "var a = {foo: 5300, bar: g10}; a.bar();", `{"foo":530}`},
+		{"g11", false, func(a Value) (int, Value) {
+			a.SetProperty(foo, 533)
+			return 534, a.Dup()
+		}, nil, "var a = {foo: 42, bar: g11}; g11(a);", `[534,{"foo":533}]`},
 	} {
 		nm := test.nm
 		if nm == "" {

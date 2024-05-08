@@ -43,9 +43,6 @@
 // Parts of the documentation were copied from the quickjs documentation, see
 // LICENSE-QUICKJS for details.
 //
-// BUG(jnml) TODO: Add Value support to the value converter for registered Go
-// functions.
-//
 // [C quickjs]: https://bellard.org/quickjs
 // [modernc.org/libquickjs]: https://pkg.go.dev/modernc.org/libquickjs
 package quickjs // import "modernc.org/quickjs"
@@ -77,6 +74,10 @@ var (
 	goFuncsMu sync.Mutex
 	goFuncs   = map[int32]*goFunc{}
 	freeMagic = map[int32]struct{}{}
+
+	// UndefinedValue is a Value representing Javascript value 'undefined'. It is
+	// not associated with any particular VM.
+	UndefinedValue = Value{v: undefined}
 )
 
 // runtime represents a Javascript runtime.
@@ -673,18 +674,22 @@ func (m *VM) call(f, this lib.TJSValue, args ...any) (r any, err error) {
 	return m.value(lib.XJS_Call(tls, ctx, f, this, int32(len(jsArgs)), argv), true)
 }
 
-func (m *VM) newObject(v lib.TJSValue) *Object {
+func (m *VM) newObject(v lib.TJSValue) (r *Object, err error) {
 	tls := m.runtime.tls
 	ctx := m.cContext
 	json := lib.XJS_JSONStringify(tls, ctx, v, undefined, undefined)
 
 	defer lib.XFreeValue(tls, ctx, json)
 
+	if isException(json) {
+		return nil, m.errFromException()
+	}
+
 	p := lib.XToCString(tls, ctx, json)
 
 	defer lib.XJS_FreeCString(tls, ctx, p)
 
-	return &Object{json: libc.GoString(p)}
+	return &Object{json: libc.GoString(p)}, nil
 }
 
 var (
@@ -780,7 +785,7 @@ func (m *VM) value(v lib.TJSValue, free bool) (r any, err error) {
 
 		return libc.GoString(p), nil
 	case lib.EJS_TAG_OBJECT: // -1
-		return m.newObject(v), nil
+		return m.newObject(v)
 	case lib.EJS_TAG_INT: //  0,
 		return int(*(*int32)(unsafe.Pointer(&v))), nil
 	case lib.EJS_TAG_BOOL: //  1,
@@ -1057,7 +1062,6 @@ func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uint
 	if info.wantThis {
 		switch {
 		case isNative(info.in[0]):
-			panic(todo(""))
 			dup := lib.XDupValue(tls, ctx, this)
 			defer lib.XFreeValue(tls, ctx, dup)
 			in = append(in, reflect.ValueOf(Value{vm: m, v: dup}))
@@ -1088,7 +1092,6 @@ func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uint
 		}
 		switch {
 		case isNative(typ):
-			panic(todo(""))
 			dup := lib.XDupValue(tls, ctx, *(*lib.TJSValue)(unsafe.Pointer(argv)))
 			defer lib.XFreeValue(tls, ctx, dup)
 			in = append(in, reflect.ValueOf(Value{vm: m, v: dup}))
@@ -1115,7 +1118,12 @@ func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uint
 	case 1:
 		switch {
 		case isNative(info.out[0]):
-			panic(todo(""))
+			x, ok := out[0].Interface().(Value)
+			if !ok {
+				return r, fmt.Errorf("internal error: native Javascript value does not have type 'Value' (%v:)", origin(1))
+			}
+
+			r = x.v
 		default:
 			r, err = m.jsValue(out[0])
 		}
@@ -1130,6 +1138,8 @@ func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uint
 }
 
 func (m *VM) jsValue(in reflect.Value) (out lib.TJSValue, err error) {
+	tls := m.runtime.tls
+	ctx := m.cContext
 	defer func() {
 		if isException(out) && err == nil {
 			err = m.errFromException()
@@ -1163,7 +1173,24 @@ func (m *VM) jsValue(in reflect.Value) (out lib.TJSValue, err error) {
 			return m.eval(s, EvalGlobal)
 		}
 
-		panic(todo("%T", in.Interface()))
+		b, err := json.Marshal(in.Interface())
+		if err != nil {
+			return out, err
+		}
+
+		p, err := libc.CString(string(b))
+		if err != nil {
+			return out, err
+		}
+
+		defer libc.Xfree(tls, p)
+
+		v := lib.XJS_ParseJSON(tls, ctx, p, libc.Tsize_t(len(b)), uintptr(unsafe.Pointer(&evalFN)))
+		if isException(v) {
+			return out, m.errFromException()
+		}
+
+		return v, nil
 	case reflect.Interface:
 		return m.jsInterfaceValue(in)
 	case reflect.Slice:
@@ -1173,7 +1200,7 @@ func (m *VM) jsValue(in reflect.Value) (out lib.TJSValue, err error) {
 		}
 		return m.jsArray(a)
 	default:
-		panic(todo("", in.Kind()))
+		return out, fmt.Errorf("internal error: %v (%v:)", in.Kind(), origin(1))
 	}
 }
 
@@ -1214,7 +1241,6 @@ func (m *VM) jsArray(a []reflect.Value) (out lib.TJSValue, err error) {
 	for _, v := range a {
 		switch x := v.Interface().(type) {
 		case Value:
-			panic(todo(""))
 			s = append(s, x.v)
 		default:
 			jv, err := m.jsValue(v)
@@ -1383,6 +1409,31 @@ type Value struct {
 	v  lib.TJSValue
 }
 
+// VM returns the VM associated with 'v'.
+func (v *Value) VM() *VM {
+	return v.vm
+}
+
+// SetProperty sets v.prop = val.
+func (v Value) SetProperty(prop Atom, val any) (err error) {
+	return v.vm.SetProperty(v, prop, val)
+}
+
+// SetPropertyValue sets v.prop = val.
+func (v Value) SetPropertyValue(prop Atom, val Value) (err error) {
+	return v.vm.SetPropertyValue(v, prop, val)
+}
+
+// GetPropertyValue returns v.prop.
+func (v Value) GetPropertyValue(prop Atom) (r Value, err error) {
+	return v.vm.GetPropertyValue(v, prop)
+}
+
+// GetProperty returns v.prop.
+func (v Value) GetProperty(this Value, prop Atom) (r any, err error) {
+	return v.vm.GetProperty(v, prop)
+}
+
 // MarshalJSON implements encoding/json.Marshaler.
 func (v Value) MarshalJSON() (r []byte, err error) {
 	tls := v.vm.runtime.tls
@@ -1390,6 +1441,10 @@ func (v Value) MarshalJSON() (r []byte, err error) {
 	json := lib.XJS_JSONStringify(tls, ctx, v.v, undefined, undefined)
 
 	defer lib.XFreeValue(tls, ctx, json)
+
+	if isException(json) {
+		return nil, v.vm.errFromException()
+	}
 
 	p := lib.XToCString(tls, ctx, json)
 	l := libc.Xstrlen(tls, p)
@@ -1412,4 +1467,15 @@ func (v Value) Dup() Value {
 func (v *Value) Free() {
 	lib.XFreeValue(v.vm.runtime.tls, v.vm.cContext, v.v)
 	*v = Value{}
+}
+
+// Any attemtps to convert 'v' to any using the same rules as there are for
+// the return value of VM.Eval.
+func (v Value) Any() (r any, err error) {
+	return v.vm.value(v.v, false)
+}
+
+// IsUndefined reports whether 'v' represents the Javascript value 'undefined'.
+func (v Value) IsUndefined() bool {
+	return v.v.Ftag == lib.EJS_TAG_UNDEFINED
 }
