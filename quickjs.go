@@ -850,34 +850,34 @@ func (m *VM) AddStdHelpers() error {
 	return nil
 }
 
-func throwTypeError(tls *libc.TLS, ctx uintptr, msg string, args ...any) (r lib.TJSValue, err error) {
-	bp := tls.Alloc(8 + 8*len(args))
-
-	defer tls.Free(8 + 8*len(args))
-
+func throwTypeError(tls *libc.TLS, ctx uintptr, msg string, args ...any) (r lib.TJSValue) {
 	p, err := libc.CString(msg)
 	if err != nil {
-		return r, err
+		return lib.XJS_ThrowTypeError(tls, ctx, 0, 0)
 	}
 
 	defer libc.Xfree(tls, p)
 
-	return lib.XJS_ThrowTypeError(tls, ctx, p, libc.VaList(bp+8, args...)), nil
+	bp := tls.Alloc(8 + 8*len(args))
+
+	defer tls.Free(8 + 8*len(args))
+
+	return lib.XJS_ThrowTypeError(tls, ctx, p, libc.VaList(bp+8, args...))
 }
 
-func throwInternalError(tls *libc.TLS, ctx uintptr, msg string, args ...any) (r lib.TJSValue, err error) {
-	bp := tls.Alloc(8 + 8*len(args))
-
-	defer tls.Free(8 + 8*len(args))
-
+func throwInternalError(tls *libc.TLS, ctx uintptr, msg string, args ...any) (r lib.TJSValue) {
 	p, err := libc.CString(msg)
 	if err != nil {
-		return r, err
+		return lib.XJS_ThrowInternalError(tls, ctx, 0, 0)
 	}
 
 	defer libc.Xfree(tls, p)
 
-	return lib.XJS_ThrowInternalError(tls, ctx, p, libc.VaList(bp+8, args...)), nil
+	bp := tls.Alloc(8 + 8*len(args))
+
+	defer tls.Free(8 + 8*len(args))
+
+	return lib.XJS_ThrowInternalError(tls, ctx, p, libc.VaList(bp+8, args...))
 }
 
 type goFunc struct {
@@ -1036,7 +1036,7 @@ func fp(f interface{}) uintptr {
 }
 
 // typedef JSValue JSCFunctionMagic(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic);
-func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uintptr, magic int32) (r lib.TJSValue, err error) {
+func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uintptr, magic int32) (r lib.TJSValue) {
 	goFuncsMu.Lock()
 	info := goFuncs[magic]
 	goFuncsMu.Unlock()
@@ -1112,20 +1112,24 @@ func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uint
 	}
 
 	out := info.f.Call(in)
+	var err error
 	switch len(info.out) {
 	case 0:
-		return undefined, nil
+		return undefined
 	case 1:
 		switch {
 		case isNative(info.out[0]):
 			x, ok := out[0].Interface().(Value)
 			if !ok {
-				return r, fmt.Errorf("internal error: native Javascript value does not have type 'Value' (%v:)", origin(1))
+				return throwTypeError(tls, ctx, fmt.Sprintf("internal error: native Javascript value does not have type 'Value' (%v:)", origin(1)))
 			}
 
 			r = x.v
 		default:
 			r, err = m.jsValue(out[0])
+			if err != nil {
+				return throwTypeError(tls, ctx, fmt.Sprintf("cannot convert value: %v", err))
+			}
 		}
 	default:
 		r, err = m.jsArray(out)
@@ -1134,7 +1138,7 @@ func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uint
 		return throwTypeError(tls, ctx, fmt.Sprintf("callback %s: %v", info.name, err))
 	}
 
-	return r, nil
+	return r
 }
 
 func (m *VM) jsValue(in reflect.Value) (out lib.TJSValue, err error) {
