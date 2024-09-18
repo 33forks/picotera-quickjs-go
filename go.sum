@@ -11,6 +11,8 @@ github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 github.com/shopspring/decimal v1.4.0 h1:bxl37RwXBklmTi0C79JfXCEBD1cqqHt0bbgBAGFp81k=
 github.com/shopspring/decimal v1.4.0/go.mod h1:gawqmDU56v4yIKSwfBSFip1HdCCXN8/+DMd9qYNcwME=
+golang.org/x/exp v0.0.0-20230315142452-642cacee5cc0 h1:pVgRXcIictcr+lBQIFeiwuwtDIs4eL21OuM9nyAADmo=
+golang.org/x/exp v0.0.0-20230315142452-642cacee5cc0/go.mod h1:CxIveKay+FTh1D0yPZemJVgC/95VzuuOLq5Qi4xnoYc=
 golang.org/x/mod v0.16.0 h1:QX4fJ0Rr5cPQCF7O9lh9Se4pmwfwskqZfq5moyldzic=
 golang.org/x/sys v0.6.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.18.0 h1:DBdB3niSjOA/O0blCZBqDefyWNYveAYMNF1Wum0DYQ4=
@@ -86,6 +88,8 @@ modernc.org/libc v1.60.0 h1:XeRF1gXky7JE5E8IErtYAdKj+ykZPdYUsgJNQ8RFWIA=
 modernc.org/libc v1.60.0/go.mod h1:xJuobKuNxKH3RUatS7GjR+suWj+5c2K7bi4m/S5arOY=
 modernc.org/libc v1.60.1 h1:at373l8IFRTkJIkAU85BIuUoBM4T1b51ds0E1ovPG2s=
 modernc.org/libc v1.60.1/go.mod h1:xJuobKuNxKH3RUatS7GjR+suWj+5c2K7bi4m/S5arOY=
+modernc.org/libc v1.61.0 h1:eGFcvWpqlnoGwzZeZe3PWJkkKbM/3SUGyk1DVZQ0TpE=
+modernc.org/libc v1.61.0/go.mod h1:DvxVX89wtGTu+r72MLGhygpfi3aUGgZRdAYGCAVVud0=
 modernc.org/libquickjs v0.8.0 h1:F93a+G1KjjOmVsbYdXNQ7muk9EIZuVBghXX9LRv/vXw=
 modernc.org/libquickjs v0.8.0/go.mod h1:d/+FaW/WkHr41IsBJQu5Ezkzt1/ywIe5WUlOBHAnWBE=
 modernc.org/libquickjs v0.8.1 h1:UYDtsg0a0ALqtxkV1buTQtmZqayZUcZjAvGs1hfYtjU=
