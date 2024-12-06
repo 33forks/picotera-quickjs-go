@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/shopspring/decimal v1.4.0
 	modernc.org/fileutil v1.3.0
-	modernc.org/libc v1.61.3
+	modernc.org/libc v1.61.4
 	modernc.org/libquickjs v0.9.25
 )
 
