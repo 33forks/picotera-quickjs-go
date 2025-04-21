@@ -2,12 +2,11 @@ module modernc.org/quickjs
 
 go 1.23.0
 
-
 require (
 	github.com/shopspring/decimal v1.4.0
 	modernc.org/fileutil v1.3.0
 	modernc.org/libc v1.63.0
-	modernc.org/libquickjs v0.9.41
+	modernc.org/libquickjs v0.9.42
 )
 
 require (
