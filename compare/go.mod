@@ -1,15 +1,15 @@
 module modernc.org/quickjs/compare
 
-go 1.22.2
+go 1.23.0
 
 require (
-	github.com/dop251/goja v0.0.0-20240220182346-e401ed450204
+	github.com/dop251/goja v0.0.0-20250309171923-bcd7cc6bf64c
 	modernc.org/fileutil v1.3.0
 	modernc.org/quickjs v0.8.2
 )
 
 require (
-	github.com/dlclark/regexp2 v1.7.0 // indirect
+	github.com/dlclark/regexp2 v1.11.4 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/google/pprof v0.0.0-20230207041349-798e818bf904 // indirect

@@ -13,7 +13,6 @@
 //
 //	OS      Arch
 //	-------------
-//	linux   386
 //	linux   amd64
 //	linux   loong64
 //
@@ -67,6 +66,7 @@ var (
 	_ json.Marshaler = (*Object)(nil)
 	_ json.Marshaler = (*Value)(nil)
 
+	//TODO TJSValue is not a struct on 32 bit archs
 	null      = lib.TJSValue{Ftag: lib.EJS_TAG_NULL}
 	undefined = lib.TJSValue{Ftag: lib.EJS_TAG_UNDEFINED}
 

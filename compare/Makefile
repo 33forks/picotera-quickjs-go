@@ -9,7 +9,7 @@ all: editor
 	staticcheck 2>&1
 
 benchmark:
-	go test -timeout 24h -run @ -bench . 2>&1 | tee log-benchmark
+	go test -vet=off -timeout 24h -run @ -bench . 2>&1 | tee log-benchmark
 
 clean:
 	rm -f log-* cpu.test mem.test *.out go.work*
