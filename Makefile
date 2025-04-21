@@ -20,18 +20,16 @@ edit:
 	@if [ -f "Session.vim" ]; then gvim -S & else gvim -p Makefile go.mod builder.json all_test.go examples_test.go quickjs.go & fi
 
 editor:
-	gofmt -l -s -w . 2>&1 | tee log-editor
-	go test -c -o /dev/null ./... 2>&1 | tee -a log-editor
-	go install -v  ./... 2>&1 | tee -a log-editor
+	gofmt -l -s -w .
+	go test -c -o /dev/null ./...
+	go install -v  ./...
 	staticcheck 2>&1
 
 test:
-	go test -failfast -v -timeout 24h -count=1 ./... 2>&1 | tee log-test
-	grep -a 'TRC\|TODO\|ERRORF\|FAIL' log-test || true 2>&1 | tee -a log-test
+	go test -failfast -v -timeout 24h -count=1 ./...
 
 short-test:
-	go test -failfast -v -short -timeout 24h -count=1 ./... 2>&1 | tee log-test
-	grep -a 'TRC\|TODO\|ERRORF\|FAIL' log-test || true 2>&1 | tee -a log-test
+	go test -failfast -v -short -timeout 24h -count=1 ./...
 
 work:
 	rm -f go.work*
@@ -48,7 +46,7 @@ mem:
 	make -C ./compare mem
 
 leak:
-	go test -v -run TestMemgrind2 -tags=libc.memgrind 2>&1 | tee log-memgrind
+	go test -v -run TestMemgrind2 -tags=libc.memgrind
 
 cover:
 	cover=$(shell mktemp) ; \
