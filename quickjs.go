@@ -13,6 +13,7 @@
 //
 //	OS      Arch
 //	-------------
+//	linux   386
 //	linux   amd64
 //	linux   arm64
 //	linux   loong64
@@ -25,7 +26,7 @@
 //
 // # Performance
 //
-// This package @ v0.8.0
+// This package @ v0.12.26
 //
 // vs https://pkg.go.dev/github.com/dop251/goja@v0.0.0-20250309171923-bcd7cc6bf64c
 //
@@ -70,10 +71,6 @@ var (
 	_ json.Marshaler = (*Object)(nil)
 	_ json.Marshaler = (*Value)(nil)
 
-	//TODO TJSValue is not a struct on 32 bit archs
-	null      = lib.TJSValue{Ftag: lib.EJS_TAG_NULL}
-	undefined = lib.TJSValue{Ftag: lib.EJS_TAG_UNDEFINED}
-
 	staticMagic atomic.Int32
 
 	goFuncsMu sync.Mutex
@@ -108,17 +105,9 @@ func newRuntime() (*runtime, error) {
 	}, nil
 }
 
-// close releases the resources held by r.
-func (r *runtime) close() error {
-	lib.XJS_FreeRuntime(r.tls, r.cRuntime)
-	r.tls.Close()
-	*r = runtime{}
-	return nil
-}
-
 // newVM returns a newly created VM.
 func (r *runtime) newVM() (*VM, error) {
-	argv := libc.Xcalloc(r.tls, 2, libc.Tsize_t(unsafe.Sizeof(lib.TJSValue{})))
+	argv := libc.Xcalloc(r.tls, 2, libc.Tsize_t(sizeofJsValue))
 	if argv == 0 {
 		return nil, fmt.Errorf("OOM")
 	}
@@ -137,10 +126,16 @@ func (r *runtime) newVM() (*VM, error) {
 	}, nil
 }
 
+// close releases the resources held by r.
+func (r *runtime) close() error {
+	lib.XJS_FreeRuntime(r.tls, r.cRuntime)
+	r.tls.Close()
+	*r = runtime{}
+	return nil
+}
+
 func newInt32(n int32) (r lib.TJSValue) {
-	*(*int32)(unsafe.Pointer(&r)) = n
-	r.Ftag = lib.EJS_TAG_INT
-	return r
+	return lib.XNewInt32(nil, 0, n)
 }
 
 // NewInt returns a new Value from 'n'.
@@ -155,12 +150,6 @@ func (m *VM) NewInt(n int) Value {
 // NewFloat64 returns a new Value from 'n'.
 func (m *VM) NewFloat64(n float64) Value {
 	return Value{vm: m, v: newFloat(n)}
-}
-
-func newFloat(n float64) (r lib.TJSValue) {
-	*(*float64)(unsafe.Pointer(&r)) = n
-	r.Ftag = lib.EJS_TAG_FLOAT64
-	return r
 }
 
 // NewString returns a new Value from 's'.
@@ -186,17 +175,6 @@ func (m *VM) newString(s string) (r lib.TJSValue, err error) {
 	return lib.XJS_NewStringLen(tls, ctx, p, lib.Tsize_t(len(s))), nil
 }
 
-func newBool(n bool) (r lib.TJSValue) {
-	switch {
-	case n:
-		*(*int32)(unsafe.Pointer(&r)) = 1
-	default:
-		*(*int32)(unsafe.Pointer(&r)) = 0
-	}
-	r.Ftag = lib.EJS_TAG_BOOL
-	return r
-}
-
 func jsInt(n int64) lib.TJSValue {
 	switch {
 	case n >= math.MinInt32 && n <= math.MaxInt32:
@@ -213,10 +191,6 @@ func jsUint(n uint64) lib.TJSValue {
 	default:
 		return newFloat(float64(n))
 	}
-}
-
-func isException(v lib.TJSValue) bool {
-	return v.Ftag == lib.EJS_TAG_EXCEPTION
 }
 
 var (
@@ -382,7 +356,7 @@ func (m *VM) EvalValue(javascript string, flags int) (r Value, err error) {
 	defer libc.Xfree(tls, ps)
 
 	v := lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(javascript)), uintptr(unsafe.Pointer(&evalFN)), int32(flags))
-	if v.Ftag == lib.EJS_TAG_EXCEPTION {
+	if isException(v) {
 		lib.XFreeValue(tls, ctx, v)
 		return r, m.errFromException()
 	}
@@ -490,7 +464,7 @@ func (m *VM) convertArgs(goArgs ...any) (jsArgs, free []lib.TJSValue, err error)
 		case nil:
 			jsArgs = append(jsArgs, null)
 		case Value:
-			if x.vm != m && x.v.Ftag < 0 {
+			if x.vm != m && tag(x.v) < 0 {
 				return nil, free, fmt.Errorf("cannot use a Value from a different VM")
 			}
 
@@ -626,7 +600,7 @@ func (m *VM) callValue(f, this lib.TJSValue, args ...any) (r Value, err error) {
 	}
 	var argv uintptr
 	if len(jsArgs) != 0 {
-		sz := libc.Tsize_t(unsafe.Sizeof(lib.TJSValue{}) * uintptr(len(jsArgs)))
+		sz := libc.Tsize_t(sizeofJsValue * uintptr(len(jsArgs)))
 		argv = libc.Xmalloc(tls, sz)
 
 		defer libc.Xfree(tls, argv)
@@ -637,7 +611,7 @@ func (m *VM) callValue(f, this lib.TJSValue, args ...any) (r Value, err error) {
 
 	}
 	v := lib.XJS_Call(tls, ctx, f, this, int32(len(jsArgs)), argv)
-	if v.Ftag == lib.EJS_TAG_EXCEPTION {
+	if isException(v) {
 		lib.XFreeValue(tls, ctx, v)
 		return r, m.errFromException()
 	}
@@ -666,7 +640,7 @@ func (m *VM) call(f, this lib.TJSValue, args ...any) (r any, err error) {
 	}
 	var argv uintptr
 	if len(jsArgs) != 0 {
-		sz := libc.Tsize_t(unsafe.Sizeof(lib.TJSValue{}) * uintptr(len(jsArgs)))
+		sz := libc.Tsize_t(sizeofJsValue * uintptr(len(jsArgs)))
 		argv = libc.Xmalloc(tls, sz)
 
 		defer libc.Xfree(tls, argv)
@@ -707,15 +681,15 @@ var (
 func (m *VM) value(v lib.TJSValue, free bool) (r any, err error) {
 	tls := m.runtime.tls
 	ctx := m.cContext
-	if free && v.Ftag < 0 {
+	if free && tag(v) < 0 {
 		// all tags with a reference count are negative
 		defer lib.XFreeValue(tls, ctx, v)
 	}
 
-	switch v.Ftag {
+	switch tag(v) {
 	case lib.EJS_TAG_BIG_DECIMAL: // -11,
 		ps := lib.XJS_GetPropertyStr(tls, ctx, v, toString)
-		if ps.Ftag != lib.EJS_TAG_OBJECT {
+		if tag(ps) != lib.EJS_TAG_OBJECT {
 			return nil, fmt.Errorf("failed to get BigDecimal.toString()")
 		}
 
@@ -737,7 +711,7 @@ func (m *VM) value(v lib.TJSValue, free bool) (r any, err error) {
 		return n, nil
 	case lib.EJS_TAG_BIG_INT: // -10,
 		ps := lib.XJS_GetPropertyStr(tls, ctx, v, toString)
-		if ps.Ftag != lib.EJS_TAG_OBJECT {
+		if tag(ps) != lib.EJS_TAG_OBJECT {
 			return nil, fmt.Errorf("failed to get BigInt.toString()")
 		}
 
@@ -760,7 +734,7 @@ func (m *VM) value(v lib.TJSValue, free bool) (r any, err error) {
 		return n, nil
 	case lib.EJS_TAG_BIG_FLOAT: // -9,
 		ps := lib.XJS_GetPropertyStr(tls, ctx, v, toString)
-		if ps.Ftag != lib.EJS_TAG_OBJECT {
+		if tag(ps) != lib.EJS_TAG_OBJECT {
 			return nil, fmt.Errorf("failed to get BigInt.toString()")
 		}
 
@@ -802,7 +776,7 @@ func (m *VM) value(v lib.TJSValue, free bool) (r any, err error) {
 	case lib.EJS_TAG_EXCEPTION: // 6,
 		return nil, m.errFromException()
 	case lib.EJS_TAG_FLOAT64: // 7,
-		return *(*float64)(unsafe.Pointer(&v)), nil
+		return jsvToFloat64(v), nil
 	}
 	return Unsupported{}, nil
 }
@@ -1086,7 +1060,6 @@ func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uint
 		i++
 	}
 	types := info.in[i:]
-	sz := unsafe.Sizeof(lib.TJSValue{})
 	for i := 0; i < int(argc); i++ {
 		var typ reflect.Type
 		switch {
@@ -1113,7 +1086,7 @@ func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uint
 
 			in = append(in, rv)
 		}
-		argv += sz
+		argv += sizeofJsValue
 	}
 
 	out := info.f.Call(in)
@@ -1266,15 +1239,14 @@ func (m *VM) jsArray(a []reflect.Value) (out lib.TJSValue, err error) {
 func (m *VM) jsArrayOf(a []lib.TJSValue) (out lib.TJSValue, err error) {
 	tls := m.runtime.tls
 	ctx := m.cContext
-	sz := unsafe.Sizeof(lib.TJSValue{})
-	argv := libc.Xmalloc(tls, lib.Tsize_t(len(a))*lib.Tsize_t(sz))
+	argv := libc.Xmalloc(tls, lib.Tsize_t(len(a))*lib.Tsize_t(sizeofJsValue))
 
 	defer libc.Xfree(tls, argv)
 
 	p := argv
 	for _, v := range a {
 		*(*lib.TJSValue)(unsafe.Pointer(p)) = v
-		p += sz
+		p += sizeofJsValue
 	}
 	out = lib.ArrayOf(tls, ctx, int32(len(a)), argv)
 	if isException(out) {
@@ -1486,5 +1458,5 @@ func (v Value) Any() (r any, err error) {
 
 // IsUndefined reports whether 'v' represents the Javascript value 'undefined'.
 func (v Value) IsUndefined() bool {
-	return v.v.Ftag == lib.EJS_TAG_UNDEFINED
+	return tag(v.v) == lib.EJS_TAG_UNDEFINED
 }

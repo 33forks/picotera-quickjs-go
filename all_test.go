@@ -275,7 +275,7 @@ func testCall3(t *testing.T) {
 		{`function f(a) { return a; }; f`, []any{nil}, nil},
 		{`function f(a) { return a; }; f`, []any{Undefined{}}, Undefined{}},
 		{`function f(a) { return a; }; f`, []any{123}, 123},
-		{`function f(a) { return a; }; f`, []any{1234567890123}, 1.234567890123e+12},
+		{`function f(a) { return a; }; f`, []any{int64(1234567890123)}, 1.234567890123e+12},
 		{`function f(a) { return a; }; f`, []any{true}, true},
 		{`function f(a) { return a; }; f`, []any{"foo"}, "foo"},
 		{`function f(a) { return a; }; f`, []any{big.NewInt(42)}, 42},
@@ -362,7 +362,7 @@ obj;
 
 	defer x.Free()
 
-	if g, e := x.v.Ftag, lib.EJS_TAG_OBJECT; g != int64(e) {
+	if g, e := tag(x.v), lib.EJS_TAG_OBJECT; g != int32(e) {
 		t.Fatal(g, e)
 	}
 
