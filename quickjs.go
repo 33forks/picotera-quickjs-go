@@ -27,17 +27,20 @@
 //
 // This package @ v0.8.0
 //
-// vs https://pkg.go.dev/github.com/dop251/goja @v0.0.0-20240220182346-e401ed450204
+// vs https://pkg.go.dev/github.com/dop251/goja@v0.0.0-20250309171923-bcd7cc6bf64c
 //
-//	go test -timeout 24h -run @ -bench . 2>&1 | tee log-benchmark
+//	jnml@3900x:~/src/modernc.org/quickjs/compare$ date ; make benchmark
+//	Wed Apr 23 12:15:18 CEST 2025
+//	go test -vet=off -timeout 24h -run @ -bench . 2>&1 | tee log-benchmark
 //	goos: linux
 //	goarch: amd64
-//	pkg: modernc.org/quickjs
+//	pkg: modernc.org/quickjs/compare
 //	cpu: AMD Ryzen 9 3900X 12-Core Processor
-//	BenchmarkArewefastyet/ccgo-24    1    115820232777 ns/op          22680 B/op            67 allocs/op
-//	BenchmarkArewefastyet/goja-24    1    184796170244 ns/op    28111172328 B/op    1755493570 allocs/op
+//	BenchmarkArewefastyet/ccgo-24  1  122005890899 ns/op       169424 B/op          69 allocs/op
+//	BenchmarkArewefastyet/goja-24  1  178848393816 ns/op  25972563848 B/op  1495943715 allocs/op
 //	PASS
-//	ok  modernc.org/quickjs 300.630s
+//	ok  	modernc.org/quickjs/compare	300.876s
+//	jnml@3900x:~/src/modernc.org/quickjs/compare$
 //
 // # Notes
 //

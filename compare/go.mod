@@ -5,7 +5,7 @@ go 1.23.0
 require (
 	github.com/dop251/goja v0.0.0-20250309171923-bcd7cc6bf64c
 	modernc.org/fileutil v1.3.0
-	modernc.org/quickjs v0.8.2
+	modernc.org/quickjs v0.12.26
 )
 
 require (
@@ -18,10 +18,11 @@ require (
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
-	golang.org/x/sys v0.18.0 // indirect
+	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
+	golang.org/x/sys v0.32.0 // indirect
 	golang.org/x/text v0.3.8 // indirect
-	modernc.org/libc v1.50.4 // indirect
-	modernc.org/libquickjs v0.7.1 // indirect
-	modernc.org/mathutil v1.6.0 // indirect
-	modernc.org/memory v1.8.0 // indirect
+	modernc.org/libc v1.63.0 // indirect
+	modernc.org/libquickjs v0.9.43 // indirect
+	modernc.org/mathutil v1.7.1 // indirect
+	modernc.org/memory v1.10.0 // indirect
 )
