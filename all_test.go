@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shopspring/decimal"
 	util "modernc.org/fileutil/ccgo"
 	lib "modernc.org/libquickjs"
 )
@@ -84,9 +83,6 @@ func testEval2(t *testing.T) {
 
 	defer m.Close()
 
-	m.AddIntrinsicBigFloat()
-	m.AddIntrinsicBigDecimal()
-
 	for _, test := range []struct {
 		js string
 		v  any
@@ -96,12 +92,6 @@ func testEval2(t *testing.T) {
 		{"BigInt('-1234567890123456789')", newBigInt(t, "-1234567890123456789"), "-1234567890123456789"},
 		{"1234567890123456789n", newBigInt(t, "1234567890123456789"), "1234567890123456789"},
 		{"-1234567890123456789n", newBigInt(t, "-1234567890123456789"), "-1234567890123456789"},
-		{"BigFloat('1234567890.123456789e+5')", newBigFloat(t, "1234567890.123456789e+5"), "1.234567890123456789e+14"},
-		{"BigFloat('-1234567890.123456789e+5')", newBigFloat(t, "-1234567890.123456789e+5"), "-1.23456789012345678899999999999999994e+14"},
-		{"BigDecimal('1234567890.123456789')", newBigDecimal(t, "1234567890.123456789"), "1234567890.123456789"},
-		{"BigDecimal('1234567890.123456789')", newBigDecimal(t, "1234567890.123456789"), "1234567890.123456789"},
-		{"1234567890.123456789m", newBigDecimal(t, "1234567890.123456789"), "1234567890.123456789"},
-		{"-1234567890.123456789m", newBigDecimal(t, "-1234567890.123456789"), "-1234567890.123456789"},
 	} {
 		v, err := m.Eval(test.js, EvalGlobal)
 		t.Logf("%s: %T(%[1]v) %v", test.js, v, err)
@@ -195,9 +185,6 @@ func testCall2(t *testing.T) {
 
 	defer m.Close()
 
-	m.AddIntrinsicBigFloat()
-	m.AddIntrinsicBigDecimal()
-
 	for _, test := range []struct {
 		js string
 		v  any
@@ -209,8 +196,6 @@ func testCall2(t *testing.T) {
 		{`function f() { return true; }; f`, true},
 		{`function f() { return 3.14; }; f`, 3.14},
 		{`function f() { return 1n; }; f`, 1},
-		{`function f() { return BigFloat('0.5'); }; f`, 0.5},
-		{`function f() { return 12.34m; }; f`, "12.34"},
 		{`function f() { return {1:2,3:4}; }; f`, `{"1":2,"3":4}`},
 	} {
 		v, err := m.Call(test.js)
@@ -232,14 +217,6 @@ func testCall2(t *testing.T) {
 			if g, e := x, big.NewInt(int64(test.v.(int))); g.Cmp(e) != 0 {
 				t.Errorf("got %v, expected %v", g, e)
 			}
-		case *big.Float:
-			if g, e := x, big.NewFloat(float64(test.v.(float64))); g.Cmp(e) != 0 {
-				t.Errorf("got %v, expected %v", g, e)
-			}
-		case decimal.Decimal:
-			if g, e := x.String(), test.v; g != e {
-				t.Errorf("got %v, expected %v", g, e)
-			}
 		case *Object:
 			if g, e := x.json, test.v; g != e {
 				t.Errorf("got %v, expected %v", g, e)
@@ -257,9 +234,6 @@ func testCall3(t *testing.T) {
 	}
 
 	defer m.Close()
-
-	m.AddIntrinsicBigFloat()
-	m.AddIntrinsicBigDecimal()
 
 	type T struct {
 		A int
@@ -279,8 +253,6 @@ func testCall3(t *testing.T) {
 		{`function f(a) { return a; }; f`, []any{true}, true},
 		{`function f(a) { return a; }; f`, []any{"foo"}, "foo"},
 		{`function f(a) { return a; }; f`, []any{big.NewInt(42)}, 42},
-		{`function f(a) { return a; }; f`, []any{big.NewFloat(0.5)}, 0.5},
-		{`function f(a) { return a; }; f`, []any{decimal.NewFromInt(42)}, "42"},
 		{`function f(a, b, c, d) { return {a: a, b: b, c: c, d: d}; }; f`, []any{"aa", 11, "cc", 22}, `{"a":"aa","b":11,"c":"cc","d":22}`},
 		{`function f(a) { return a; }; f`, []any{T{11, "aa"}}, `{"A":11,"B":"aa"}`},
 		{`function f(a) { return a.A; }; f`, []any{T{11, "aa"}}, 11},
@@ -304,14 +276,6 @@ func testCall3(t *testing.T) {
 			}
 		case *big.Int:
 			if g, e := x, big.NewInt(int64(test.v.(int))); g.Cmp(e) != 0 {
-				t.Errorf("got %v, expected %v", g, e)
-			}
-		case *big.Float:
-			if g, e := x, big.NewFloat(float64(test.v.(float64))); g.Cmp(e) != 0 {
-				t.Errorf("got %v, expected %v", g, e)
-			}
-		case decimal.Decimal:
-			if g, e := x.String(), test.v; g != e {
 				t.Errorf("got %v, expected %v", g, e)
 			}
 		case *Object:
@@ -385,25 +349,6 @@ func newBigInt(t *testing.T, s string) *big.Int {
 	return n
 }
 
-func newBigFloat(t *testing.T, s string) *big.Float {
-	n := big.NewFloat(0)
-	n.SetPrec(128)
-	if _, ok := n.SetString(s); !ok {
-		t.Fatalf("big.Float.SetString(%q) failed", s)
-	}
-
-	return n
-}
-
-func newBigDecimal(t *testing.T, s string) decimal.Decimal {
-	n, err := decimal.NewFromString(s)
-	if err != nil {
-		t.Fatalf("decimal.NewFromString(%q) failed", s)
-	}
-
-	return n
-}
-
 func TestMem(t *testing.T) {
 	if testing.Short() {
 		t.Skip("-short")
@@ -457,9 +402,6 @@ func testRegisterGoFuncOK(t *testing.T) {
 
 	defer m.Close()
 
-	m.AddIntrinsicBigFloat()
-	m.AddIntrinsicBigDecimal()
-
 	obj, err := m.Eval("obj = {a: 463, b: 'foo'}; obj;", EvalGlobal)
 	if err != nil {
 		t.Fatalf("obj: %v", err)
@@ -498,10 +440,6 @@ func testRegisterGoFuncOK(t *testing.T) {
 		{"", false, func() string { return "2.5" }, nil, "", "2.5"},
 		{"", false, func() any { return big.NewInt(500) }, nil, "", 500},
 		{"", false, func() *big.Int { return big.NewInt(501) }, nil, "", 501},
-		{"", false, func() any { return big.NewFloat(0.5) }, nil, "", 0.5},
-		{"", false, func() *big.Float { return big.NewFloat(0.5) }, nil, "", 0.5},
-		{"", false, func() any { return decimal.NewFromInt(504) }, nil, "", "504"},
-		{"", false, func() decimal.Decimal { return decimal.NewFromInt(505) }, nil, "", "505"},
 		{"", false, func() any { return obj }, nil, "", `{"a":463,"b":"foo"}`},
 		{"", false, func() any { return []any{42, "foo"} }, nil, "", `[42,"foo"]`},
 		{"", false, func() []any { return []any{42, "foo"} }, nil, "", `[42,"foo"]`},
@@ -565,14 +503,6 @@ func testRegisterGoFuncOK(t *testing.T) {
 			}
 		case *big.Int:
 			if g, e := x, big.NewInt(int64(test.v.(int))); g.Cmp(e) != 0 {
-				t.Errorf("got %v, expected %v", g, e)
-			}
-		case *big.Float:
-			if g, e := x, big.NewFloat(float64(test.v.(float64))); g.Cmp(e) != 0 {
-				t.Errorf("got %v, expected %v", g, e)
-			}
-		case decimal.Decimal:
-			if g, e := x.String(), test.v; g != e {
 				t.Errorf("got %v, expected %v", g, e)
 			}
 		case *Object:

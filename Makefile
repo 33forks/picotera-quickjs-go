@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
 
-.PHONY:	all clean edit editor work test cpu mem short-test benchmark cover
+.PHONY:	all clean edit editor work test cpu mem shorttest benchmark cover
 
 all: editor
 	golint 2>&1
@@ -28,7 +28,7 @@ editor:
 test:
 	go test -failfast -v -timeout 24h -count=1 ./...
 
-short-test:
+shorttest:
 	go test -failfast -v -short -timeout 24h -count=1 ./...
 
 work:

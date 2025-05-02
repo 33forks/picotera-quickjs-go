@@ -31,30 +31,6 @@ func ExampleObject_String() {
 	// {"a":356,"b":"foo"}
 }
 
-// Enable BigDecimal.
-func ExampleVM_AddIntrinsicBigDecimal() {
-	m, _ := NewVM()
-	defer m.Close()
-	fmt.Println(m.Eval("BigDecimal('1234567890.123456789');", EvalGlobal))
-	m.AddIntrinsicBigDecimal()
-	fmt.Println(m.Eval("BigDecimal('1234567890.123456789');", EvalGlobal))
-	// Output:
-	// <nil> ReferenceError: 'BigDecimal' is not defined
-	// 1234567890.123456789 <nil>
-}
-
-// Enable BigFloat.
-func ExampleVM_AddIntrinsicBigFloat() {
-	m, _ := NewVM()
-	defer m.Close()
-	fmt.Println(m.Eval("BigFloat('1234567890.123456789e+5');", EvalGlobal))
-	m.AddIntrinsicBigFloat()
-	fmt.Println(m.Eval("BigFloat('1234567890.123456789e+5');", EvalGlobal))
-	// Output:
-	// <nil> ReferenceError: 'BigFloat' is not defined
-	// 1.234567890123456789e+14 <nil>
-}
-
 // Call a Javascript function.
 func ExampleVM_Call_function() {
 	m, _ := NewVM()

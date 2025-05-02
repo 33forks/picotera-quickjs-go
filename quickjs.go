@@ -15,33 +15,29 @@
 //	-------------
 //	linux   386
 //	linux   amd64
+//	linux   arm
 //	linux   arm64
 //	linux   loong64
+//	linux   ppc64le
+//	linux   riscv64
+//	linux   s390x
 //
 // # Builders
 //
-// Builder results are available at:
-//
-// https://modern-c.appspot.com/-/builder/?importpath=modernc.org%2fquickjs
+// Builder results available [here]:
 //
 // # Performance
 //
-// This package @ v0.12.26
+// This package @ 2024-05-02
 //
 // vs https://pkg.go.dev/github.com/dop251/goja@v0.0.0-20250309171923-bcd7cc6bf64c
 //
-//	jnml@3900x:~/src/modernc.org/quickjs/compare$ date ; make benchmark
-//	Wed Apr 23 12:15:18 CEST 2025
-//	go test -vet=off -timeout 24h -run @ -bench . 2>&1 | tee log-benchmark
 //	goos: linux
 //	goarch: amd64
 //	pkg: modernc.org/quickjs/compare
-//	cpu: AMD Ryzen 9 3900X 12-Core Processor
-//	BenchmarkArewefastyet/ccgo-24  1  122005890899 ns/op       169424 B/op          69 allocs/op
-//	BenchmarkArewefastyet/goja-24  1  178848393816 ns/op  25972563848 B/op  1495943715 allocs/op
-//	PASS
-//	ok  	modernc.org/quickjs/compare	300.876s
-//	jnml@3900x:~/src/modernc.org/quickjs/compare$
+//	cpu: AMD Ryzen 9 3900X 12-Core Processor            
+//	BenchmarkArewefastyet/ccgo-24  1  124975842787 ns/op       164248 B/op          66 allocs/op
+//	BenchmarkArewefastyet/goja-24  1  174826506351 ns/op  26086745776 B/op  1491036308 allocs/op
 //
 // # Notes
 //
@@ -49,6 +45,7 @@
 // LICENSE-QUICKJS for details.
 //
 // [C quickjs]: https://bellard.org/quickjs
+// [here]: https://modern-c.appspot.com/-/builder/?importpath=modernc.org%2fquickjs
 // [modernc.org/libquickjs]: https://pkg.go.dev/modernc.org/libquickjs
 package quickjs // import "modernc.org/quickjs"
 
@@ -62,7 +59,6 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/shopspring/decimal"
 	"modernc.org/libc"
 	lib "modernc.org/libquickjs"
 )
@@ -321,8 +317,6 @@ var evalFN = [...]byte{'<', 'e', 'v', 'a', 'l', '>', 0}
 //	bool                    bool                                    nil
 //	float64                 float64                                 nil
 //	BigInt                  *math/big.Int                           nil
-//	BigFloat                *math/big.Float                         nil
-//	BigDecimal              github.com/shopspring/decimal.Decimal   nil
 //	object                  *Object                                 nil
 //	any other type          Unsupported                             nil
 func (m *VM) Eval(javascript string, flags int) (r any, err error) {
@@ -395,8 +389,6 @@ func (m *VM) globalObject() lib.TJSValue {
 //	bool                                    bool
 //	float64                                 float64
 //	*math/big.Int                           BigInt
-//	*math/big.Float                         BigFloat
-//	github.com/shopspring/decimal.Decimal   BigDecimal
 //	*Object                                 object
 //	Value                                   native Javascript Value
 //	any other type                          object from JSON produced by encoding.json/Marshall(arg)
@@ -540,24 +532,6 @@ func (m *VM) convertArgs(goArgs ...any) (jsArgs, free []lib.TJSValue, err error)
 
 			free = append(free, jv)
 			jsArgs = append(jsArgs, jv)
-		case *big.Float:
-			s := fmt.Sprintf("BigFloat('%s')", x.String())
-			jv, err := m.eval(s, EvalGlobal)
-			if err != nil {
-				return nil, free, err
-			}
-
-			free = append(free, jv)
-			jsArgs = append(jsArgs, jv)
-		case decimal.Decimal:
-			s := x.String() + "m"
-			jv, err := m.eval(s, EvalGlobal)
-			if err != nil {
-				return nil, free, err
-			}
-
-			free = append(free, jv)
-			jsArgs = append(jsArgs, jv)
 		default:
 			b, err := json.Marshal(x)
 			if err != nil {
@@ -687,29 +661,10 @@ func (m *VM) value(v lib.TJSValue, free bool) (r any, err error) {
 	}
 
 	switch tag(v) {
-	case lib.EJS_TAG_BIG_DECIMAL: // -11,
-		ps := lib.XJS_GetPropertyStr(tls, ctx, v, toString)
-		if tag(ps) != lib.EJS_TAG_OBJECT {
-			return nil, fmt.Errorf("failed to get BigDecimal.toString()")
-		}
+	case
+		lib.EJS_TAG_BIG_INT,       // -9,
+		lib.EJS_TAG_SHORT_BIG_INT: // 7,
 
-		defer lib.XFreeValue(tls, ctx, ps)
-
-		jsString := lib.XJS_Call(tls, ctx, ps, v, 0, m.toStringArgv)
-
-		defer lib.XFreeValue(tls, ctx, jsString)
-
-		p := lib.XToCString(tls, ctx, jsString)
-
-		defer lib.XJS_FreeCString(tls, ctx, p)
-
-		n, err := decimal.NewFromString(libc.GoString(p))
-		if err != nil {
-			return nil, fmt.Errorf("decimal.NewFromString failed")
-		}
-
-		return n, nil
-	case lib.EJS_TAG_BIG_INT: // -10,
 		ps := lib.XJS_GetPropertyStr(tls, ctx, v, toString)
 		if tag(ps) != lib.EJS_TAG_OBJECT {
 			return nil, fmt.Errorf("failed to get BigInt.toString()")
@@ -732,31 +687,6 @@ func (m *VM) value(v lib.TJSValue, free bool) (r any, err error) {
 		}
 
 		return n, nil
-	case lib.EJS_TAG_BIG_FLOAT: // -9,
-		ps := lib.XJS_GetPropertyStr(tls, ctx, v, toString)
-		if tag(ps) != lib.EJS_TAG_OBJECT {
-			return nil, fmt.Errorf("failed to get BigInt.toString()")
-		}
-
-		defer lib.XFreeValue(tls, ctx, ps)
-
-		*(*lib.TJSValue)(unsafe.Pointer(m.toStringArgv)) = m.int32_16
-		jsString := lib.XJS_Call(tls, ctx, ps, v, 1, m.toStringArgv)
-
-		defer lib.XFreeValue(tls, ctx, jsString)
-
-		p := lib.XToCString(tls, ctx, jsString)
-
-		defer lib.XJS_FreeCString(tls, ctx, p)
-
-		s := libc.GoString(p)
-		n := big.NewFloat(0)
-		n.SetPrec(uint(4 * len(s)))
-		if _, base, err := n.Parse(s, 16); base != 16 || err != nil {
-			return nil, fmt.Errorf("big.Float.Parse failed")
-		}
-
-		return n, nil
 	case lib.EJS_TAG_STRING: // -7,
 		p := lib.XToCString(tls, ctx, v)
 
@@ -775,7 +705,8 @@ func (m *VM) value(v lib.TJSValue, free bool) (r any, err error) {
 		return Undefined{}, nil
 	case lib.EJS_TAG_EXCEPTION: // 6,
 		return nil, m.errFromException()
-	case lib.EJS_TAG_FLOAT64: // 7,
+		panic(todo(""))
+	case lib.EJS_TAG_FLOAT64: // 8,
 		return jsvToFloat64(v), nil
 	}
 	return Unsupported{}, nil
@@ -793,16 +724,6 @@ func (m *VM) errFromException() error {
 	defer lib.XJS_FreeCString(tls, ctx, p)
 
 	return fmt.Errorf("%s", libc.GoString(p))
-}
-
-// AddIntrinsicBigFloat adds the BigFloat object to 'm'.
-func (m *VM) AddIntrinsicBigFloat() {
-	lib.XJS_AddIntrinsicBigFloat(m.runtime.tls, m.cContext)
-}
-
-// AddIntrinsicBigDecimal adds the BigDecimal object to 'm'.
-func (m *VM) AddIntrinsicBigDecimal() {
-	lib.XJS_AddIntrinsicBigDecimal(m.runtime.tls, m.cContext)
 }
 
 var (
@@ -1149,12 +1070,6 @@ func (m *VM) jsValue(in reflect.Value) (out lib.TJSValue, err error) {
 	case reflect.String:
 		return m.newString(in.String())
 	case reflect.Struct:
-		switch x := in.Interface().(type) {
-		case decimal.Decimal:
-			s := x.String() + "m"
-			return m.eval(s, EvalGlobal)
-		}
-
 		b, err := json.Marshal(in.Interface())
 		if err != nil {
 			return out, err
@@ -1205,9 +1120,6 @@ func (m *VM) jsPtrValue(in reflect.Value) (out lib.TJSValue, err error) {
 	case *big.Int:
 		s := x.String() + "n"
 		return m.eval(s, EvalGlobal)
-	case *big.Float:
-		s := fmt.Sprintf("BigFloat('%s')", x.String())
-		return m.eval(s, EvalGlobal)
 	default:
 		ev := in.Elem()
 		if ev.Kind() == reflect.Pointer { // avoid unbound recursion
@@ -1248,7 +1160,7 @@ func (m *VM) jsArrayOf(a []lib.TJSValue) (out lib.TJSValue, err error) {
 		*(*lib.TJSValue)(unsafe.Pointer(p)) = v
 		p += sizeofJsValue
 	}
-	out = lib.ArrayOf(tls, ctx, int32(len(a)), argv)
+	out = lib.Xjs_array_of(tls, ctx, undefined, int32(len(a)), argv)
 	if isException(out) {
 		err = m.errFromException()
 	}
