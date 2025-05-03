@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	goruntime "runtime"
 	"runtime/debug"
 	"testing"
 	"time"
@@ -18,7 +19,10 @@ import (
 )
 
 var (
+	goarch   = goruntime.GOARCH
+	goos     = goruntime.GOOS
 	memgrind bool
+	target   = fmt.Sprintf("%s/%s", goos, goarch)
 )
 
 //lint:ignore U1000 debug helper
@@ -352,6 +356,11 @@ func newBigInt(t *testing.T, s string) *big.Int {
 func TestMem(t *testing.T) {
 	if testing.Short() {
 		t.Skip("-short")
+	}
+
+	switch target {
+	case "linux/riscv64", "linux/s390x":
+		t.Skip("target too slow")
 	}
 
 	if !memgrind {

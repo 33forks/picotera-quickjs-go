@@ -35,7 +35,7 @@
 //	goos: linux
 //	goarch: amd64
 //	pkg: modernc.org/quickjs/compare
-//	cpu: AMD Ryzen 9 3900X 12-Core Processor            
+//	cpu: AMD Ryzen 9 3900X 12-Core Processor
 //	BenchmarkArewefastyet/ccgo-24  1  124975842787 ns/op       164248 B/op          66 allocs/op
 //	BenchmarkArewefastyet/goja-24  1  174826506351 ns/op  26086745776 B/op  1491036308 allocs/op
 //
