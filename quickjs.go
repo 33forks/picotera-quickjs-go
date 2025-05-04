@@ -2,8 +2,10 @@
 // Use of the source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package quickjs is an idiomatic Go wrapper for [modernc.org/libquickjs], an
-// embeddable, CGo-free Javascript engine.
+
+// Package quickjs is a pure Go embeddable Javascript engine. It supports the
+// ECMA script 14 ([ES2023]) specification including modules, asynchronous
+// generators, proxies and BigInt.
 //
 // See also the original [C quickjs] library.
 //
@@ -24,7 +26,7 @@
 //
 // # Builders
 //
-// Builder results available [here]:
+// Builder results available [here].
 //
 // # Performance
 //
@@ -45,6 +47,7 @@
 // LICENSE-QUICKJS for details.
 //
 // [C quickjs]: https://bellard.org/quickjs
+// [ES2023]: https://tc39.es/ecma262/2023/
 // [here]: https://modern-c.appspot.com/-/builder/?importpath=modernc.org%2fquickjs
 // [modernc.org/libquickjs]: https://pkg.go.dev/modernc.org/libquickjs
 package quickjs // import "modernc.org/quickjs"
