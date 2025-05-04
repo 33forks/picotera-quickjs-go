@@ -28,16 +28,16 @@
 //
 // # Performance
 //
-// This package @ 2024-05-02
+// This package @v0.13.0
 //
 // vs https://pkg.go.dev/github.com/dop251/goja@v0.0.0-20250309171923-bcd7cc6bf64c
 //
 //	goos: linux
 //	goarch: amd64
 //	pkg: modernc.org/quickjs/compare
-//	cpu: AMD Ryzen 9 3900X 12-Core Processor
-//	BenchmarkArewefastyet/ccgo-24  1  124975842787 ns/op       164248 B/op          66 allocs/op
-//	BenchmarkArewefastyet/goja-24  1  174826506351 ns/op  26086745776 B/op  1491036308 allocs/op
+//	cpu: AMD Ryzen 9 3900X 12-Core Processor            
+//	BenchmarkArewefastyet/ccgo-24  1  128778858212 ns/op       169736 B/op          71 allocs/op
+//	BenchmarkArewefastyet/goja-24  1  172620652529 ns/op  25951873232 B/op  1490060424 allocs/op
 //
 // # Notes
 //
