@@ -2,7 +2,6 @@
 // Use of the source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-
 // Package quickjs is a pure Go embeddable Javascript engine. It supports the
 // ECMA script 14 ([ES2023]) specification including modules, asynchronous
 // generators, proxies and BigInt.
@@ -37,7 +36,7 @@
 //	goos: linux
 //	goarch: amd64
 //	pkg: modernc.org/quickjs/compare
-//	cpu: AMD Ryzen 9 3900X 12-Core Processor            
+//	cpu: AMD Ryzen 9 3900X 12-Core Processor
 //	BenchmarkArewefastyet/ccgo-24  1  128778858212 ns/op       169736 B/op          71 allocs/op
 //	BenchmarkArewefastyet/goja-24  1  172620652529 ns/op  25951873232 B/op  1490060424 allocs/op
 //
@@ -49,6 +48,7 @@
 // [C quickjs]: https://bellard.org/quickjs
 // [ES2023]: https://tc39.es/ecma262/2023/
 // [here]: https://modern-c.appspot.com/-/builder/?importpath=modernc.org%2fquickjs
+//
 // [modernc.org/libquickjs]: https://pkg.go.dev/modernc.org/libquickjs
 package quickjs // import "modernc.org/quickjs"
 
@@ -690,7 +690,10 @@ func (m *VM) value(v lib.TJSValue, free bool) (r any, err error) {
 		}
 
 		return n, nil
-	case lib.EJS_TAG_STRING: // -7,
+	case
+		lib.EJS_TAG_STRING_ROPE, // -6,
+		lib.EJS_TAG_STRING:      // -7,
+
 		p := lib.XToCString(tls, ctx, v)
 
 		defer lib.XJS_FreeCString(tls, ctx, p)
