@@ -11,7 +11,7 @@ Package quickjs is a pure Go embeddable Javascript engine. It supports the
 ECMA script 14 ([ES2023]) specification including modules, asynchronous
 generators, proxies and BigInt.
 
-See also the original [C quickjs] library.
+See also the original [C QuickJS] library.
 
-[C quickjs]: https://bellard.org/quickjs
+[C QuickJS]: https://bellard.org/quickjs
 [ES2023]: https://tc39.es/ecma262/2023/

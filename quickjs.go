@@ -6,7 +6,7 @@
 // ECMA script 14 ([ES2023]) specification including modules, asynchronous
 // generators, proxies and BigInt.
 //
-// See also the original [C quickjs] library.
+// See also the original [C QuickJS] library.
 //
 // # Supported platforms and architectures
 //
@@ -14,6 +14,10 @@
 //
 //	OS      Arch
 //	-------------
+//	darwin  amd64
+//	darwin  arm64
+//	freebsd amd64
+//	freebsd arm64
 //	linux   386
 //	linux   amd64
 //	linux   arm
@@ -22,10 +26,12 @@
 //	linux   ppc64le
 //	linux   riscv64
 //	linux   s390x
+//	windows amd64
+//	windows arm64
 //
 // # Builders
 //
-// Builder results available [here].
+// Builder results are available [here].
 //
 // # Performance
 //
@@ -45,7 +51,7 @@
 // Parts of the documentation were copied from the quickjs documentation, see
 // LICENSE-QUICKJS for details.
 //
-// [C quickjs]: https://bellard.org/quickjs
+// [C QuickJS]: https://bellard.org/quickjs
 // [ES2023]: https://tc39.es/ecma262/2023/
 // [here]: https://modern-c.appspot.com/-/builder/?importpath=modernc.org%2fquickjs
 //
@@ -138,6 +144,9 @@ func newInt32(n int32) (r lib.TJSValue) {
 }
 
 // NewInt returns a new Value from 'n'.
+//
+// Note: See the [Value] documentation for details about manual memory
+// management of Value objects.
 func (m *VM) NewInt(n int) Value {
 	if n >= math.MinInt32 && n <= math.MaxInt32 {
 		return Value{vm: m, v: newInt32(int32(n))}
@@ -147,11 +156,17 @@ func (m *VM) NewInt(n int) Value {
 }
 
 // NewFloat64 returns a new Value from 'n'.
+//
+// Note: See the [Value] documentation for details about manual memory
+// management of Value objects.
 func (m *VM) NewFloat64(n float64) Value {
 	return Value{vm: m, v: newFloat(n)}
 }
 
 // NewString returns a new Value from 's'.
+//
+// Note: See the [Value] documentation for details about manual memory
+// management of Value objects.
 func (m *VM) NewString(s string) (r Value, err error) {
 	v, err := m.newString(s)
 	if err != nil {
@@ -159,6 +174,11 @@ func (m *VM) NewString(s string) (r Value, err error) {
 	}
 
 	return Value{vm: m, v: v}, nil
+}
+
+// NewObjectValue returns a new Value representing '{}'.
+func (m *VM) NewObjectValue() (r Value, err error) {
+	return Value{vm: m, v: lib.XJS_NewObject(m.runtime.tls, m.cContext)}, nil
 }
 
 func (m *VM) newString(s string) (r lib.TJSValue, err error) {
@@ -342,6 +362,9 @@ func (m *VM) Eval(javascript string, flags int) (r any, err error) {
 //
 // If no error is returned, the caller must properly handle the returned Value
 // using Dup/Free.
+//
+// Note: See the [Value] documentation for details about manual memory
+// management of Value objects.
 func (m *VM) EvalValue(javascript string, flags int) (r Value, err error) {
 	tls := m.runtime.tls
 	ctx := m.cContext
@@ -372,6 +395,14 @@ func (m *VM) eval(js string, flags int) (r lib.TJSValue, err error) {
 	defer libc.Xfree(tls, ps)
 
 	return lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(js)), uintptr(unsafe.Pointer(&evalFN)), int32(flags)), nil
+}
+
+// GlobalObject returns m's global object.
+//
+// Note: See the [Value] documentation for details about manual memory
+// management of Value objects.
+func (m *VM) GlobalObject() (r Value) {
+	return Value{vm: m, v: m.globalObject()}
 }
 
 func (m *VM) globalObject() lib.TJSValue {
@@ -418,8 +449,8 @@ func (m *VM) Call(function string, args ...any) (r any, err error) {
 
 // CallValue is like Call but returns (Value, error) like EvalValue
 //
-// If no error is returned, the caller must properly handle the returned Value
-// using Dup/Free.
+// Note: See the [Value] documentation for details about manual memory
+// management of Value objects.
 func (m *VM) CallValue(function string, args ...any) (r Value, err error) {
 	tls := m.runtime.tls
 	ctx := m.cContext
@@ -556,6 +587,8 @@ func (m *VM) convertArgs(goArgs ...any) (jsArgs, free []lib.TJSValue, err error)
 	return jsArgs, free, nil
 }
 
+// Note: See the [Value] documentation for details about manual memory
+// management of Value objects.
 func (m *VM) callValue(f, this lib.TJSValue, args ...any) (r Value, err error) {
 	tls := m.runtime.tls
 	ctx := m.cContext
@@ -730,30 +763,6 @@ func (m *VM) errFromException() error {
 	defer lib.XJS_FreeCString(tls, ctx, p)
 
 	return fmt.Errorf("%s", libc.GoString(p))
-}
-
-var (
-	stdC = [...]byte{'s', 't', 'd', 0}
-	std  = uintptr(unsafe.Pointer(&stdC[0]))
-)
-
-// InitModuleStd adds the "std" module to 'm'.
-func (m *VM) InitModuleStd() error {
-	tls := m.runtime.tls
-	ctx := m.cContext
-	if lib.Xjs_init_module_std(tls, ctx, std) == 0 {
-		return fmt.Errorf("module initialization failed")
-	}
-
-	return nil
-}
-
-// AddStdHelpers adds the 'print' and 'console' global objects to 'm'.
-func (m *VM) AddStdHelpers() error {
-	tls := m.runtime.tls
-	ctx := m.cContext
-	lib.Xjs_std_add_helpers(tls, ctx, -1, 0)
-	return nil
 }
 
 func throwTypeError(tls *libc.TLS, ctx uintptr, msg string, args ...any) (r lib.TJSValue) {
@@ -1237,6 +1246,9 @@ func (m *VM) SetProperty(this Value, prop Atom, val any) (err error) {
 }
 
 // GetPropertyValue returns this.prop.
+//
+// Note: See the [Value] documentation for details about manual memory
+// management of Value objects.
 func (m *VM) GetPropertyValue(this Value, prop Atom) (r Value, err error) {
 	tls := m.runtime.tls
 	ctx := m.cContext
@@ -1275,8 +1287,8 @@ func (m *VM) GetProperty(this Value, prop Atom) (r any, err error) {
 // In 'foo' Free must be used. For example
 //
 //	func foo(v Value) {
-//		defer v.Free()
-//		...
+//	        defer v.Free()
+//	        ...
 //	}
 //
 // This ensures the/only topmost Free marks 'v' eligible for garbage collection.
@@ -1290,14 +1302,14 @@ func (m *VM) GetProperty(this Value, prop Atom) (r any, err error) {
 // respect the original nesting. This is correct.
 //
 //	Dup             // in main
-//		Dup     // in foo
-//		Free    // in foo
+//	        Dup     // in foo
+//	        Free    // in foo
 //	Free            // in main
 //
 // This will fail, for example in the above discussed goroutines scenario.
 //
 //	Dup            // in g1
-//		Dup    // in g2
+//	        Dup    // in g2
 //	Free           // in g1
 //	        Free   // in g2
 //

@@ -76,36 +76,6 @@ func ExampleVM_Eval_object() {
 	// {"a":356,"b":"foo"} <nil>
 }
 
-// Use the std module.
-func ExampleVM_InitModuleStd() {
-	m, _ := NewVM()
-	defer m.Close()
-	m.InitModuleStd()
-	m.Eval(`
-import * as std from 'std';
-globalThis.std = std;
-`, EvalModule)
-	fmt.Println(m.Call("std.sprintf", "%s %i", "hello", 42))
-	// Output:
-	// hello 42 <nil>
-}
-
-// Add std helpers.
-func ExampleVM_AddStdHelpers() {
-	m, _ := NewVM()
-	defer m.Close()
-	fmt.Println(m.Eval("console.toString();", EvalGlobal))
-	m.AddStdHelpers()
-	fmt.Println(m.Eval("console.toString();", EvalGlobal))
-	fmt.Println(m.Eval("console.log.toString();", EvalGlobal))
-	// Output:
-	// <nil> ReferenceError: 'console' is not defined
-	// [object Object] <nil>
-	// function log() {
-	//     [native code]
-	// } <nil>
-}
-
 // Call error returning Go function from Javascript.
 func ExampleVM_RegisterFunc_error() {
 	m, _ := NewVM()
