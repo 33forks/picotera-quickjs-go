@@ -35,7 +35,7 @@
 //
 // # Performance
 //
-// This package @v0.13.0
+// This package @v0.13.2
 //
 // vs https://pkg.go.dev/github.com/dop251/goja@v0.0.0-20250309171923-bcd7cc6bf64c
 //
@@ -43,8 +43,11 @@
 //	goarch: amd64
 //	pkg: modernc.org/quickjs/compare
 //	cpu: AMD Ryzen 9 3900X 12-Core Processor
-//	BenchmarkArewefastyet/ccgo-24  1  128778858212 ns/op       169736 B/op          71 allocs/op
-//	BenchmarkArewefastyet/goja-24  1  172620652529 ns/op  25951873232 B/op  1490060424 allocs/op
+//	BenchmarkArewefastyet/ccgo-24  1  128224839492 ns/op       169848 B/op          73 allocs/op
+//	BenchmarkArewefastyet/goja-24  1  173825845377 ns/op  26122785512 B/op  1492473123 allocs/op
+//	PASS
+//	ok  	modernc.org/quickjs/compare	302.069s
+//	make[1]: Opouští se adresář „/home/jnml/src/modernc.org/quickjs/compare“
 //
 // # Notes
 //
@@ -355,6 +358,22 @@ func (m *VM) Eval(javascript string, flags int) (r any, err error) {
 	return m.value(lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(javascript)), uintptr(unsafe.Pointer(&evalFN)), int32(flags)), true)
 }
 
+// EvalThis is like eval but sets javascript 'this' to 'obj'.
+func (m *VM) EvalThis(obj Value, javascript string, flags int) (r any, err error) {
+	defer obj.Free()
+
+	tls := m.runtime.tls
+	ctx := m.cContext
+	ps, err := libc.CString(javascript)
+	if err != nil {
+		return nil, fmt.Errorf("OOM")
+	}
+
+	defer libc.Xfree(tls, ps)
+
+	return m.value(lib.XJS_EvalThis(tls, ctx, obj.v, ps, libc.Tsize_t(len(javascript)), uintptr(unsafe.Pointer(&evalFN)), int32(flags)), true)
+}
+
 // EvalValue evaluates a script or module source in 'javascript' and returns
 // the resulting Value, or an error, if any.
 //
@@ -376,6 +395,28 @@ func (m *VM) EvalValue(javascript string, flags int) (r Value, err error) {
 	defer libc.Xfree(tls, ps)
 
 	v := lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(javascript)), uintptr(unsafe.Pointer(&evalFN)), int32(flags))
+	if isException(v) {
+		lib.XFreeValue(tls, ctx, v)
+		return r, m.errFromException()
+	}
+
+	return Value{vm: m, v: v}, nil
+}
+
+// EvalThisValue is like EvalValue but sets javascript 'this' to obj.
+func (m *VM) EvalThisValue(obj Value, javascript string, flags int) (r Value, err error) {
+	defer obj.Free()
+
+	tls := m.runtime.tls
+	ctx := m.cContext
+	ps, err := libc.CString(javascript)
+	if err != nil {
+		return r, fmt.Errorf("OOM")
+	}
+
+	defer libc.Xfree(tls, ps)
+
+	v := lib.XJS_EvalThis(tls, ctx, obj.v, ps, libc.Tsize_t(len(javascript)), uintptr(unsafe.Pointer(&evalFN)), int32(flags))
 	if isException(v) {
 		lib.XFreeValue(tls, ctx, v)
 		return r, m.errFromException()
@@ -963,7 +1004,7 @@ func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uint
 	m := info.vm
 	haveArgs := int(argc)
 	if haveArgs < info.minArgs {
-		// trc("wantThis=%v haveArgs=%v minArgs=%v maxArgs=%v argc=%v", info.wantThis, haveArgs, info.minArgs, info.maxArgs, argc)
+		trc("wantThis=%v haveArgs=%v minArgs=%v maxArgs=%v argc=%v", info.wantThis, haveArgs, info.minArgs, info.maxArgs, argc)
 		return throwTypeError(tls, ctx, fmt.Sprintf("not enough arguments in call to %s", info.name))
 	}
 
