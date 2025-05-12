@@ -1,5 +1,5 @@
 set -e
-for tag in none
+for tag in none libc.memgrind
 do
 	echo "-tags=$tag"
 	echo "GOOS=darwin GOARCH=amd64"

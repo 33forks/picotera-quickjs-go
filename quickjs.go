@@ -1356,6 +1356,9 @@ func (m *VM) GetProperty(this Value, prop Atom) (r any, err error) {
 //
 // The fix might be in this case to arrange goroutine 1 to wait for goroutine 2
 // to complete before executing Free in goroutine 1.
+//
+// See TestMemgrind for an example of how to detect memory leaks caused not
+// only by improper Value use.
 type Value struct {
 	vm *VM
 	v  lib.TJSValue
