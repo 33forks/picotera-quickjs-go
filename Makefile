@@ -2,13 +2,16 @@
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
 
-.PHONY:	all clean edit editor work test cpu mem shorttest benchmark cover
+.PHONY:	all build_all_targets clean edit editor work test cpu mem shorttest benchmark cover
 
 all: editor
 	golint 2>&1
 
 benchmark:
 	make -C ./compare benchmark
+
+build_all_targets:
+	./build_all_targets.sh
 
 clean:
 	make -C ./compare/ clean
