@@ -359,7 +359,12 @@ func TestMem(t *testing.T) {
 	}
 
 	switch target {
-	case "linux/riscv64", "linux/s390x":
+	case
+		"freebsd/arm64",
+		"linux/riscv64",
+		"linux/s390x",
+		"windows/arm64":
+
 		t.Skip("target too slow")
 	}
 
