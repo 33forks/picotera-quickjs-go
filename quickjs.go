@@ -806,6 +806,14 @@ func (m *VM) errFromException() error {
 	return fmt.Errorf("%s", libc.GoString(p))
 }
 
+// StdAddHelpers adds the 'print' and 'console' global objects to 'm'.
+func (m *VM) StdAddHelpers() error {
+	tls := m.runtime.tls
+	ctx := m.cContext
+	lib.Xjs_std_add_helpers(tls, ctx, -1, 0)
+	return nil
+}
+
 func throwTypeError(tls *libc.TLS, ctx uintptr, msg string, args ...any) (r lib.TJSValue) {
 	p, err := libc.CString(msg)
 	if err != nil {
