@@ -4,7 +4,7 @@ go 1.23.0
 
 require (
 	modernc.org/fileutil v1.3.1
-	modernc.org/libc v1.65.6
+	modernc.org/libc v1.65.7
 	modernc.org/libquickjs v0.11.0
 )
 
@@ -17,5 +17,5 @@ require (
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
-	modernc.org/memory v1.10.0 // indirect
+	modernc.org/memory v1.11.0 // indirect
 )
