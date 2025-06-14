@@ -373,6 +373,7 @@ func TestMem(t *testing.T) {
 
 		defer cancel()
 
+		t.Log(time.Now().Format(time.DateTime))
 		if _, err := util.Shell(ctx, "go", "test", fmt.Sprintf("-short=%v", testing.Short()), "-v", "-tags", "libc.memgrind", "-timeout", "12h", "-run", "TestMemgrind"); err != nil {
 			t.Fatal(err)
 		}

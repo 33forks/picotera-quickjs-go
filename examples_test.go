@@ -8,6 +8,7 @@ package quickjs // import "modernc.org/quickjs"
 
 import (
 	"fmt"
+	"time"
 )
 
 // JSON marshalling.
@@ -184,4 +185,75 @@ func ExampleVM_SetDefaultModuleLoader() {
 
 	// Output:
 	// [4,8] <nil>
+}
+
+func ExampleVM_SetEvalTimeout() {
+	m, _ := NewVM()
+	defer m.Close()
+
+	for _, timeout := range []time.Duration{100 * time.Millisecond, time.Second, 3 * time.Second} {
+		m.SetEvalTimeout(timeout)
+		t0 := time.Now()
+		r, err := m.Eval(`
+function f() {
+	var sink;
+	for (var i = 0; i < 10000; i++) {
+		sink += 42;
+		sink -= 42;
+	}
+}
+
+(function() {
+	for (var i = 0; i < 10000; i++) {
+		f();
+	}
+	return 42;
+})();
+`, EvalGlobal)
+		d := time.Since(t0)
+		step := timeout / 10
+		d = d / step * step
+		fmt.Println(r, err, d)
+	}
+
+	// Output:
+	// <nil> InternalError: interrupted 100ms
+	// <nil> InternalError: interrupted 1s
+	// <nil> InternalError: interrupted 3s
+}
+
+func ExampleVM_Interrupt() {
+	const timeout = time.Second
+	m, _ := NewVM()
+	defer m.Close()
+
+	go func() {
+		time.Sleep(timeout)
+		m.Interrupt()
+	}()
+
+	t0 := time.Now()
+	r, err := m.Eval(`
+function f() {
+	var sink;
+	for (var i = 0; i < 10000; i++) {
+		sink += 42;
+		sink -= 42;
+	}
+}
+
+(function() {
+	for (var i = 0; i < 10000; i++) {
+		f();
+	}
+	return 42;
+})();
+`, EvalGlobal)
+	d := time.Since(t0)
+	step := timeout / 10
+	d = d / step * step
+	fmt.Println(r, err, d)
+
+	// Output:
+	// <nil> InternalError: interrupted 1s
 }

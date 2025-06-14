@@ -3,7 +3,7 @@ module modernc.org/quickjs/compare
 go 1.23.0
 
 require (
-	github.com/dop251/goja v0.0.0-20250309171923-bcd7cc6bf64c
+	github.com/dop251/goja v0.0.0-20250531102226-cb187b08699c
 	modernc.org/fileutil v1.3.1
 	modernc.org/quickjs v0.13.2
 )

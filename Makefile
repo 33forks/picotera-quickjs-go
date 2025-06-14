@@ -8,6 +8,7 @@ all: editor
 	golint 2>&1
 
 benchmark:
+	date
 	make -C ./compare benchmark
 
 build_all_targets:

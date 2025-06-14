@@ -35,19 +35,16 @@
 //
 // # Performance
 //
-// This package @v0.13.2
-//
-// vs https://pkg.go.dev/github.com/dop251/goja@v0.0.0-20250309171923-bcd7cc6bf64c
-//
+// This package at 2025-06-14 vs
+// https://pkg.go.dev/github.com/dop251/goja@v0.0.0-20250531102226-cb187b08699c,
+// go version go1.24.3 linux/amd64.
 //	goos: linux
 //	goarch: amd64
 //	pkg: modernc.org/quickjs/compare
-//	cpu: AMD Ryzen 9 3900X 12-Core Processor
-//	BenchmarkArewefastyet/ccgo-24  1  128224839492 ns/op       169848 B/op          73 allocs/op
-//	BenchmarkArewefastyet/goja-24  1  173825845377 ns/op  26122785512 B/op  1492473123 allocs/op
+//	cpu: AMD Ryzen 9 3900X 12-Core Processor            
+//	BenchmarkArewefastyet/ccgo-24  1  121467542329 ns/op       169848 B/op          73 allocs/op
+//	BenchmarkArewefastyet/goja-24  1  174636722981 ns/op  26056270408 B/op  1504329409 allocs/op
 //	PASS
-//	ok  	modernc.org/quickjs/compare	302.069s
-//	make[1]: Opouští se adresář „/home/jnml/src/modernc.org/quickjs/compare“
 //
 // # Notes
 //
@@ -69,6 +66,7 @@ import (
 	"reflect"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"modernc.org/libc"
@@ -115,22 +113,31 @@ func newRuntime() (*runtime, error) {
 
 // newVM returns a newly created VM.
 func (r *runtime) newVM() (*VM, error) {
-	argv := libc.Xcalloc(r.tls, 2, libc.Tsize_t(sizeofJsValue))
+	tls := r.tls
+	argv := libc.Xcalloc(tls, 2, libc.Tsize_t(sizeofJsValue))
 	if argv == 0 {
 		return nil, fmt.Errorf("OOM")
 	}
 
-	c := lib.XJS_NewContext(r.tls, r.cRuntime)
+	interruptData := libc.Xcalloc(tls, 1, libc.Tsize_t(unsafe.Sizeof(interruptData{})))
+	if interruptData == 0 {
+		libc.Xfree(tls, argv)
+		return nil, fmt.Errorf("OOM")
+	}
+
+	c := lib.XJS_NewContext(tls, r.cRuntime)
 	if c == 0 {
+		libc.Xfree(tls, interruptData)
 		return nil, fmt.Errorf("failed to create a new Javascript context")
 	}
 
 	return &VM{
-		cContext:     c,
-		int32_2:      lib.XNewInt32(r.tls, c, 2),
-		int32_16:     lib.XNewInt32(r.tls, c, 16),
-		runtime:      r,
-		toStringArgv: argv,
+		cContext:      c,
+		int32_16:      lib.XNewInt32(r.tls, c, 16),
+		int32_2:       lib.XNewInt32(r.tls, c, 2),
+		interruptData: interruptData,
+		runtime:       r,
+		toStringArgv:  argv,
 	}, nil
 }
 
@@ -270,28 +277,108 @@ func (o *Object) MarshalJSON() (r []byte, err error) {
 	return []byte(o.json), nil
 }
 
+// return != 0 if the JS code needs to be interrupted
+func interruptHandler(tls *libc.TLS, rt, opaque uintptr) int32 {
+	if opaque == 0 {
+		return 0
+	}
+
+	if atomic.LoadInt32(&(*interruptData)(unsafe.Pointer(opaque)).interrupt) != 0 {
+		return 1
+	}
+
+	if timeLimit := (*interruptData)(unsafe.Pointer(opaque)).timeLimit; timeLimit != 0 && time.Now().UnixNano() >= timeLimit {
+		return 1
+	}
+
+	return 0
+}
+
+type interruptData struct {
+	interrupt int32 // Interrupt() pending
+	timeLimit int64 // stop when time.Now().UnixNano() > timeLimit
+}
+
 // VM represents a Javascript context (or Realm). Each VM has its
 // own global objects and system objects.
 //
 // Note: VM is not safe for concurrent use by multiple goroutines.
 type VM struct {
-	cContext uintptr // lib.TJSContext
-	goFuncs  map[string]int32
+	cContext      uintptr // lib.TJSContext
+	goFuncs       map[string]int32
 	// Safe to share, not reference counted
-	int32_16     lib.TJSValue
-	int32_2      lib.TJSValue
-	runtime      *runtime
-	toStringArgv uintptr
+	int32_16      lib.TJSValue
+	int32_2       lib.TJSValue
+	runtime       *runtime
+	timeout       time.Duration
+	interruptData uintptr
+	toStringArgv  uintptr
 }
 
 // NewVM returns a newly created VM.
 func NewVM() (*VM, error) {
-	r, err := newRuntime()
+	rt, err := newRuntime()
 	if err != nil {
 		return nil, err
 	}
 
-	return r.newVM()
+	vm, err := rt.newVM()
+	if err != nil {
+		rt.close()
+		return nil, err
+	}
+
+	lib.XJS_SetInterruptHandler(rt.tls, rt.cRuntime, fp(interruptHandler), vm.interruptData)
+	return vm, nil
+}
+
+// SetEvalTimeout sets the timeout for the various eval functions. Passing
+// zero 'd' disables timeouts.
+func (m *VM) SetEvalTimeout(d time.Duration) error {
+	m.timeout = d
+	return nil
+}
+
+// Interrupt requests 'm' to interrupt Javascript evaluation. Interrupt
+// can be called asynchronously at any time m is evaluating a script.
+func (m *VM) Interrupt() {
+	atomic.StoreInt32(&(*interruptData)(unsafe.Pointer(m.interruptData)).interrupt, 1)
+}
+
+func (m *VM) configureInterrupt() {
+	if m.interruptData != 0 {
+		(*interruptData)(unsafe.Pointer(m.interruptData)).interrupt = 0
+		if m.timeout != 0 {
+			(*interruptData)(unsafe.Pointer(m.interruptData)).timeLimit = time.Now().Add(m.timeout).UnixNano()
+		} else {
+			(*interruptData)(unsafe.Pointer(m.interruptData)).timeLimit = 0
+		}
+	}
+}
+
+// SetMemoryLimit limits m's maxmimum memory usage, in bytes.
+func (m *VM) SetMemoryLimit(limit uintptr) {
+	lib.XJS_SetMemoryLimit(m.runtime.tls, m.runtime.cRuntime, libc.Tsize_t(limit))
+}
+
+// SetGCThreshold sets the memory threshold at which a GC will be performed, in bytes.
+func (m *VM) SetGCThreshold(threshold uintptr) {
+	lib.XJS_SetGCThreshold(m.runtime.tls, m.runtime.cRuntime, libc.Tsize_t(threshold))
+}
+
+//TODO(jnml) needs changes in libquicjs stack slot checking.
+// SetMaxStackSize limits m's maxmimum stack depth, in stack frames.
+// func (m *VM) SetMaxStackSize(threshold uintptr) {
+// 	lib.XJS_SetMaxStackSize(m.runtime.tls, m.runtime.cRuntime, libc.Tsize_t(threshold))
+// }
+
+// SetCanBlock configures m's blocking mode.
+func (m *VM) SetCanBlock(value bool) {
+	n := int32(0)
+	if value {
+		n = 1
+	}
+	lib.XJS_SetCanBlock(m.runtime.tls, m.runtime.cRuntime, n)
 }
 
 // Close releases the resources held by 'm'.
@@ -316,6 +403,7 @@ func (m *VM) Close() error {
 		libc.Xfree(tls, v.tab)
 	}
 
+	libc.Xfree(tls, m.interruptData)
 	libc.Xfree(tls, m.toStringArgv)
 	lib.XJS_FreeContext(tls, ctx)
 	r := m.runtime
@@ -355,6 +443,7 @@ func (m *VM) Eval(javascript string, flags int) (r any, err error) {
 
 	defer libc.Xfree(tls, ps)
 
+	m.configureInterrupt()
 	return m.value(lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(javascript)), uintptr(unsafe.Pointer(&evalFN)), int32(flags)), true)
 }
 
@@ -371,6 +460,7 @@ func (m *VM) EvalThis(obj Value, javascript string, flags int) (r any, err error
 
 	defer libc.Xfree(tls, ps)
 
+	m.configureInterrupt()
 	return m.value(lib.XJS_EvalThis(tls, ctx, obj.v, ps, libc.Tsize_t(len(javascript)), uintptr(unsafe.Pointer(&evalFN)), int32(flags)), true)
 }
 
@@ -394,6 +484,7 @@ func (m *VM) EvalValue(javascript string, flags int) (r Value, err error) {
 
 	defer libc.Xfree(tls, ps)
 
+	m.configureInterrupt()
 	v := lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(javascript)), uintptr(unsafe.Pointer(&evalFN)), int32(flags))
 	if isException(v) {
 		lib.XFreeValue(tls, ctx, v)
@@ -416,6 +507,7 @@ func (m *VM) EvalThisValue(obj Value, javascript string, flags int) (r Value, er
 
 	defer libc.Xfree(tls, ps)
 
+	m.configureInterrupt()
 	v := lib.XJS_EvalThis(tls, ctx, obj.v, ps, libc.Tsize_t(len(javascript)), uintptr(unsafe.Pointer(&evalFN)), int32(flags))
 	if isException(v) {
 		lib.XFreeValue(tls, ctx, v)
@@ -435,6 +527,7 @@ func (m *VM) eval(js string, flags int) (r lib.TJSValue, err error) {
 
 	defer libc.Xfree(tls, ps)
 
+	m.configureInterrupt()
 	return lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(js)), uintptr(unsafe.Pointer(&evalFN)), int32(flags)), nil
 }
 
