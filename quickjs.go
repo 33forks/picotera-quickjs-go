@@ -38,10 +38,11 @@
 // This package at 2025-06-14 vs
 // https://pkg.go.dev/github.com/dop251/goja@v0.0.0-20250531102226-cb187b08699c,
 // go version go1.24.3 linux/amd64.
+//
 //	goos: linux
 //	goarch: amd64
 //	pkg: modernc.org/quickjs/compare
-//	cpu: AMD Ryzen 9 3900X 12-Core Processor            
+//	cpu: AMD Ryzen 9 3900X 12-Core Processor
 //	BenchmarkArewefastyet/ccgo-24  1  121467542329 ns/op       169848 B/op          73 allocs/op
 //	BenchmarkArewefastyet/goja-24  1  174636722981 ns/op  26056270408 B/op  1504329409 allocs/op
 //	PASS
@@ -304,8 +305,8 @@ type interruptData struct {
 //
 // Note: VM is not safe for concurrent use by multiple goroutines.
 type VM struct {
-	cContext      uintptr // lib.TJSContext
-	goFuncs       map[string]int32
+	cContext uintptr // lib.TJSContext
+	goFuncs  map[string]int32
 	// Safe to share, not reference counted
 	int32_16      lib.TJSValue
 	int32_2       lib.TJSValue
@@ -356,9 +357,12 @@ func (m *VM) configureInterrupt() {
 	}
 }
 
-// SetMemoryLimit limits m's maxmimum memory usage, in bytes.
+// SetMemoryLimit limits m's maxmimum memory usage, in bytes. Small values of
+// 'limit' are not honored because the VM needs to allocate memory also for the
+// exception object itself.  The particular value of "small" is unspecified and
+// subject to change without notice.
 func (m *VM) SetMemoryLimit(limit uintptr) {
-	lib.XJS_SetMemoryLimit(m.runtime.tls, m.runtime.cRuntime, libc.Tsize_t(limit))
+	lib.XJS_SetMemoryLimit(m.runtime.tls, m.runtime.cRuntime, max(libc.Tsize_t(limit), 128*1024))
 }
 
 // SetGCThreshold sets the memory threshold at which a GC will be performed, in bytes.
