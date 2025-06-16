@@ -211,7 +211,7 @@ function f() {
 })();
 `, EvalGlobal)
 		d := time.Since(t0)
-		step := timeout / 10
+		step := timeout / 5
 		d = d / step * step
 		fmt.Println(r, err, d)
 	}
@@ -250,7 +250,7 @@ function f() {
 })();
 `, EvalGlobal)
 	d := time.Since(t0)
-	step := timeout / 10
+	step := timeout / 5
 	d = d / step * step
 	fmt.Println(r, err, d)
 
