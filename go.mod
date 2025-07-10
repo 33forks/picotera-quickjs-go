@@ -4,7 +4,7 @@ go 1.23.0
 
 require (
 	modernc.org/fileutil v1.3.8
-	modernc.org/libc v1.66.2
+	modernc.org/libc v1.66.3
 	modernc.org/libquickjs v0.11.0
 )
 
@@ -14,7 +14,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
+	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
