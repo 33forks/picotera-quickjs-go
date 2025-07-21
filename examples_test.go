@@ -213,6 +213,10 @@ function f() {
 		d := time.Since(t0)
 		step := timeout / 5
 		d = d / step * step
+		// Some qemu builders need bigger tolerance.
+		if d >= 75*time.Millisecond && d <= 125*time.Microsecond {
+			d = 100 * time.Millisecond
+		}
 		fmt.Println(r, err, d)
 	}
 
