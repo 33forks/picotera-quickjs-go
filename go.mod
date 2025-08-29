@@ -3,9 +3,9 @@ module modernc.org/quickjs
 go 1.23.0
 
 require (
-	modernc.org/fileutil v1.3.25
+	modernc.org/fileutil v1.3.27
 	modernc.org/libc v1.66.7
-	modernc.org/libquickjs v0.11.3
+	modernc.org/libquickjs v0.11.4
 )
 
 require (
