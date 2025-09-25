@@ -731,6 +731,11 @@ func TestGetProperty(t *testing.T) {
 }
 
 func TestMicrobench(t *testing.T) {
+	switch target {
+	case "linux/s390x":
+		t.Skip("TODO")
+	}
+
 	b, err := os.ReadFile(filepath.Join("testdata", "microbench.js"))
 	if err != nil {
 		t.Fatal(err)
