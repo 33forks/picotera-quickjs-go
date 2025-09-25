@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"path/filepath"
 	goruntime "runtime"
 	"runtime/debug"
 	"testing"
@@ -726,5 +727,27 @@ func TestGetProperty(t *testing.T) {
 
 	if g, e := v, "bar"; g != e {
 		t.Fatal(g, e)
+	}
+}
+
+func TestMicrobench(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("testdata", "microbench.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := NewVM()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer m.Close()
+
+	if err := m.StdAddHelpers(); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := m.Eval(string(b), EvalGlobal); err != nil {
+		t.Fatal(err)
 	}
 }
