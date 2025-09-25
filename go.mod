@@ -5,7 +5,7 @@ go 1.23.0
 require (
 	modernc.org/fileutil v1.3.40
 	modernc.org/libc v1.66.9
-	modernc.org/libquickjs v0.11.4
+	modernc.org/libquickjs v0.12.0
 )
 
 require (
