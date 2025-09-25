@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"path/filepath"
 	goruntime "runtime"
 	"runtime/debug"
 	"testing"
@@ -730,29 +729,31 @@ func TestGetProperty(t *testing.T) {
 	}
 }
 
-func TestMicrobench(t *testing.T) {
-	switch target {
-	case "linux/s390x":
-		t.Skip("TODO")
-	}
-
-	b, err := os.ReadFile(filepath.Join("testdata", "microbench.js"))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	m, err := NewVM()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer m.Close()
-
-	if err := m.StdAddHelpers(); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := m.Eval(string(b), EvalGlobal); err != nil {
-		t.Fatal(err)
-	}
-}
+//TODO requires modernc.org/libc support that is missing on many targets
+//
+// func TestMicrobench(t *testing.T) {
+// 	switch target {
+// 	case "linux/s390x":
+// 		t.Skip("TODO")
+// 	}
+//
+// 	b, err := os.ReadFile(filepath.Join("testdata", "microbench.js"))
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+//
+// 	m, err := NewVM()
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+//
+// 	defer m.Close()
+//
+// 	if err := m.StdAddHelpers(); err != nil {
+// 		t.Fatal(err)
+// 	}
+//
+// 	if _, err := m.Eval(string(b), EvalGlobal); err != nil {
+// 		t.Fatal(err)
+// 	}
+// }
