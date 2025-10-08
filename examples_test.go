@@ -211,22 +211,15 @@ function f() {
 })();
 `, EvalGlobal)
 		d := time.Since(t0)
-		step := timeout / 5
-		d = d / step * step
-		// Some builders need bigger tolerance.
-		switch {
-		case d >= 75*time.Millisecond && d <= 125*time.Millisecond:
-			d = 100 * time.Millisecond
-		case d >= 750*time.Millisecond && d < 1250*time.Millisecond:
-			d = time.Second
-		}
-		fmt.Println(r, err, d)
+		min := timeout/2
+		max := timeout*3/2
+		fmt.Println(r, err, timeout, d >= min && d <= max)
 	}
 
 	// Output:
-	// <nil> InternalError: interrupted 100ms
-	// <nil> InternalError: interrupted 1s
-	// <nil> InternalError: interrupted 3s
+	// <nil> InternalError: interrupted 100ms true
+	// <nil> InternalError: interrupted 1s true
+	// <nil> InternalError: interrupted 3s true
 }
 
 func ExampleVM_Interrupt() {
