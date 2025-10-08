@@ -9,7 +9,7 @@ all: editor
 	staticcheck 2>&1
 
 benchmark:
-	go test -vet=off -timeout 24h -run @ -bench . 2>&1 | tee log-benchmark
+	go test -vet=off -timeout 24h -run @ -bench . -benchtime 5s | go run benchreport.go
 
 clean:
 	rm -f log-* cpu.test mem.test *.out go.work*
@@ -20,18 +20,18 @@ edit:
 	@if [ -f "Session.vim" ]; then gvim -S & else gvim -p Makefile go.mod *.go & fi
 
 editor:
-	gofmt -l -s -w . 2>&1 | tee log-editor
-	go test -c -o /dev/null ./... 2>&1 | tee -a log-editor
-	go install -v  ./... 2>&1 | tee -a log-editor
-	staticcheck 2>&1
+	gofmt -l -s -w .
+	go test -c -o /dev/null ./...
+	go install -v  ./...
+	staticcheck
 
 test:
-	go test -failfast -v -timeout 24h -count=1 ./... 2>&1 | tee log-test
-	grep -a 'TRC\|TODO\|ERRORF\|FAIL' log-test || true 2>&1 | tee -a log-test
+	go test -failfast -v -timeout 24h -count=1 ./...
+	grep -a 'TRC\|TODO\|ERRORF\|FAIL' log-test || true
 
 short-test:
-	go test -failfast -v -short -timeout 24h -count=1 ./... 2>&1 | tee log-test
-	grep -a 'TRC\|TODO\|ERRORF\|FAIL' log-test || true 2>&1 | tee -a log-test
+	go test -failfast -v -short -timeout 24h -count=1 ./...
+	grep -a 'TRC\|TODO\|ERRORF\|FAIL' log-test || true
 
 work:
 	rm -f go.work*
@@ -47,9 +47,6 @@ cpu: clean
 mem: clean
 	go test -run @ -bench BenchmarkArewefastyet/ccgo -memprofile mem.out -memprofilerate 1 -timeout 24h
 	go tool pprof -lines -web -alloc_space *.test mem.out
-
-leak:
-	go test -v -run TestMemgrind2 -tags=libc.memgrind 2>&1 | tee log-memgrind
 
 cover:
 	cover=$(shell mktemp) ; \
