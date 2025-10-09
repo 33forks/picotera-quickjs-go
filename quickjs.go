@@ -1334,7 +1334,7 @@ func (m *VM) jsArrayOf(a []lib.TJSValue) (out lib.TJSValue, err error) {
 // SetDefaultModuleLoader will enable loading module using the default module
 // loader.
 func (m *VM) SetDefaultModuleLoader() {
-	lib.XJS_SetModuleLoaderFunc(m.runtime.tls, m.runtime.cRuntime, 0, fp(lib.Xjs_module_loader), 0)
+	lib.XJS_SetModuleLoaderFunc2(m.runtime.tls, m.runtime.cRuntime, 0, fp(lib.Xjs_module_loader), 0, 0)
 }
 
 // Atom is an unique identifier of, for example, a string value. Atom values
