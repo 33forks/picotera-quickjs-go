@@ -39,18 +39,18 @@
 //
 // # Performance
 //
-// This package at 2025-06-14 vs
-// https://pkg.go.dev/github.com/dop251/goja@v0.0.0-20250531102226-cb187b08699c,
-// go version go1.24.3 linux/amd64.
+// Geomeans over a set benchmarks relative to CCGO. Detailed results available
+// in the testdata/benchmarks directory.
 //
-//	goos: linux
-//	goarch: amd64
-//	pkg: modernc.org/quickjs/compare
-//	cpu: AMD Ryzen 9 3900X 12-Core Processor
-//	BenchmarkArewefastyet/ccgo-24  1  121467542329 ns/op       169848 B/op          73 allocs/op
-//	BenchmarkArewefastyet/goja-24  1  174636722981 ns/op  26056270408 B/op  1504329409 allocs/op
-//	PASS
+//  CCGO modernc.org/quickjs v0.16.0
+//  GOJA github.com/dop251/goja v0.0.0-20250630131328-58d95d85e994
+//  QJS  github.com/fastschema/qjs v0.0.3
 //
+//                       CCGO        GOJA         QJS
+//  -------------------------------------------------
+//  darwin/arm64        1.000       1.020       0.852
+//  -------------------------------------------------
+//                       CCGO        GOJA         QJS
 // # Notes
 //
 // Parts of the documentation were copied from the quickjs documentation, see
