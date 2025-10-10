@@ -54,7 +54,9 @@ func main() {
 
 	os.Remove(results)
 	os.MkdirAll(filepath.Dir(results), 0775)
-	if out, err := exec.Command("sh", "-c", fmt.Sprintf("make benchmark > %s", results)).CombinedOutput(); err != nil {
+	out, err := exec.Command("sh", "-c", fmt.Sprintf("make benchmark > %s", results)).CombinedOutput()
+	fmt.Printf("err=%v out=%s\n", err, out)
+	if err != nil {
 		fail(1, "err=%v out=%s", err, out)
 	}
 
