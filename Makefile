@@ -21,11 +21,12 @@ clean:
 
 edit:
 	@touch log
-	@if [ -f "Session.vim" ]; then gvim -S & else gvim -p Makefile go.mod builder.json all_test.go examples_test.go quickjs.go & fi
+	@if [ -f "Session.vim" ]; then gvim -S & else gvim -p Makefile go.mod builder.json *.go & fi
 
 editor:
 	gofmt -l -s -w .
 	go test -c -o /dev/null ./...
+	go build -o /dev/null generator.go
 	go install -v  ./...
 	staticcheck 2>&1
 
