@@ -211,8 +211,8 @@ function f() {
 })();
 `, EvalGlobal)
 		d := time.Since(t0)
-		min := timeout/2
-		max := timeout*3/2
+		min := timeout / 2
+		max := timeout * 3 / 2
 		fmt.Println(r, err, timeout, d >= min && d <= max)
 	}
 

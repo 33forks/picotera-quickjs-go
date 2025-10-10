@@ -33,6 +33,10 @@
 //
 // Builder results are available [here].
 //
+// # Change Log
+//
+// 2025-10-10: Upgrade to QuickJS release 2025-09-13.
+//
 // # Performance
 //
 // This package at 2025-06-14 vs
