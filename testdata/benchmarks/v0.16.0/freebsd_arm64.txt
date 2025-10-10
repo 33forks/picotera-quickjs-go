@@ -1,0 +1,242 @@
+date
+Fri Oct 10 16:11:51 CEST 2025
+make -C ./compare benchmark
+go test -vet=off -timeout 24h -run @ -bench . -benchtime 5s | go run benchreport.go
+goos: freebsd
+goarch: arm64
+pkg: modernc.org/quickjs/compare
+BenchmarkCCGO/array_for.js-2         	   28285	    188770 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/array_for_in.js-2      	    8931	    714186 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/array_for_of.js-2      	   13988	    364426 ns/op	      16 B/op	       1 allocs/op
+BenchmarkCCGO/array_hole_length_decr.js-2         	     993	   6279765 ns/op	      40 B/op	       3 allocs/op
+BenchmarkCCGO/array_length_decr.js-2              	    1064	   5780680 ns/op	      40 B/op	       3 allocs/op
+BenchmarkCCGO/array_pop.js-2                      	    1077	   6031004 ns/op	    8040 B/op	     503 allocs/op
+BenchmarkCCGO/array_prop_create.js-2              	    4252	   1557282 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/array_push.js-2                     	    1626	   4102869 ns/op	    8000 B/op	     500 allocs/op
+BenchmarkCCGO/array_read.js-2                     	  566962	     12824 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/array_slice.js-2                    	    2619	   2341561 ns/op	      40 B/op	       3 allocs/op
+BenchmarkCCGO/array_write.js-2                    	  712532	      8542 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/date_now.js-2                       	  742219	      9600 ns/op	      16 B/op	       1 allocs/op
+BenchmarkCCGO/empty_do_loop.js-2                  	 8878603	       719.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/empty_down_loop.js-2                	14645343	       481.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/empty_down_loop2.js-2               	 3965865	      2079 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/empty_loop.js-2                     	13137946	       495.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/float_arith.js-2                    	    4528	   1264743 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/float_toExponential.js-2            	  150684	     34387 ns/op	      48 B/op	       3 allocs/op
+BenchmarkCCGO/float_toFixed.js-2                  	  219506	     32074 ns/op	      48 B/op	       3 allocs/op
+BenchmarkCCGO/float_toPrecision.js-2              	  202131	     31611 ns/op	      48 B/op	       3 allocs/op
+BenchmarkCCGO/float_toString.js-2                 	  138853	     41299 ns/op	      72 B/op	       6 allocs/op
+BenchmarkCCGO/float_to_string.js-2                	  207680	     33939 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/func_call.js-2                      	  450734	     13469 ns/op	      96 B/op	       8 allocs/op
+BenchmarkCCGO/func_closure_call.js-2              	  452755	     13377 ns/op	      96 B/op	       8 allocs/op
+BenchmarkCCGO/global_destruct.js-2                	   77906	     81385 ns/op	      16 B/op	       1 allocs/op
+BenchmarkCCGO/global_func_call.js-2               	  409432	     20239 ns/op	      96 B/op	       8 allocs/op
+BenchmarkCCGO/global_read.js-2                    	  940742	      6232 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/global_write.js-2                   	 1000000	      6985 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/int_arith.js-2                      	    5530	   1323587 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/int_toString.js-2                   	  337468	     19204 ns/op	      72 B/op	       6 allocs/op
+BenchmarkCCGO/int_to_string.js-2                  	  403417	     14309 ns/op	      48 B/op	       4 allocs/op
+BenchmarkCCGO/int_to_string2.js-2                 	  572084	     10563 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/local_destruct.js-2                 	   34428	    160858 ns/op	      16 B/op	       1 allocs/op
+BenchmarkCCGO/map_set_bigint.js-2                 	     296	  20806220 ns/op	   64000 B/op	    4000 allocs/op
+BenchmarkCCGO/map_set_int.js-2                    	     561	  12041535 ns/op	   32000 B/op	    2000 allocs/op
+BenchmarkCCGO/map_set_string.js-2                 	     272	  24022324 ns/op	   64000 B/op	    4000 allocs/op
+BenchmarkCCGO/math_min.js-2                       	    1466	   4304620 ns/op	   16000 B/op	    1000 allocs/op
+BenchmarkCCGO/prop_clone.js-2                     	   57135	    101290 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/prop_create.js-2                    	   81001	     71286 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/prop_delete.js-2                    	   38653	    164134 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/prop_read.js-2                      	 1000000	      5066 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/prop_update.js-2                    	  870013	     12118 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/prop_write.js-2                     	 1387508	      4935 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/regexp_ascii.js-2                   	     100	  51064265 ns/op	   24004 B/op	    2000 allocs/op
+BenchmarkCCGO/regexp_utf16.js-2                   	     123	  52453581 ns/op	   24003 B/op	    2000 allocs/op
+BenchmarkCCGO/string_build1.js-2                  	    3914	   1328859 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/string_build1x.js-2                 	    4542	   1401457 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/string_build2.js-2                  	    1929	   2964532 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/string_build2c.js-2                 	    4510	   1344941 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/string_build3.js-2                  	    1416	   4564250 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/string_build4.js-2                  	    1527	   3939801 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/string_build_large1.js-2            	      61	  88908415 ns/op	       2 B/op	       0 allocs/op
+BenchmarkCCGO/string_build_large2.js-2            	      62	 103609496 ns/op	       2 B/op	       0 allocs/op
+BenchmarkCCGO/string_to_float.js-2                	 1000000	      7105 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/string_to_int.js-2                  	 1000000	      6508 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/typed_array_read.js-2               	  530820	     11440 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCCGO/typed_array_write.js-2              	  699865	      7844 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQJS/array_for.js-2                       	   43600	    152342 ns/op	      11 B/op	       0 allocs/op
+BenchmarkQJS/array_for_in.js-2                    	   17934	    330540 ns/op	      28 B/op	       0 allocs/op
+BenchmarkQJS/array_for_of.js-2                    	   46069	    125915 ns/op	      11 B/op	       0 allocs/op
+BenchmarkQJS/array_hole_length_decr.js-2          	    2064	   3438339 ns/op	     270 B/op	       0 allocs/op
+BenchmarkQJS/array_length_decr.js-2               	    2113	   2723245 ns/op	     267 B/op	       0 allocs/op
+BenchmarkQJS/array_pop.js-2                       	    2486	   2179419 ns/op	     227 B/op	       0 allocs/op
+BenchmarkQJS/array_prop_create.js-2               	    2133	   3051461 ns/op	     238 B/op	       0 allocs/op
+BenchmarkQJS/array_push.js-2                      	    3693	   1634267 ns/op	     151 B/op	       0 allocs/op
+BenchmarkQJS/array_read.js-2                      	  901761	      8311 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQJS/array_slice.js-2                     	   10784	    694047 ns/op	      52 B/op	       0 allocs/op
+BenchmarkQJS/array_write.js-2                     	  339993	     21782 ns/op	       1 B/op	       0 allocs/op
+BenchmarkQJS/date_now.js-2                        	 1000000	      5613 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQJS/empty_do_loop.js-2                   	11858774	       585.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQJS/empty_down_loop.js-2                 	13158327	       660.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQJS/empty_down_loop2.js-2                	 6560325	      1041 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQJS/empty_loop.js-2                      	 8660476	       580.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQJS/float_arith.js-2                     	    4326	   1379119 ns/op	     117 B/op	       0 allocs/op
+BenchmarkQJS/float_toExponential.js-2             	  404544	     14294 ns/op	       1 B/op	       0 allocs/op
+BenchmarkQJS/float_toFixed.js-2                   	  285223	     17544 ns/op	       1 B/op	       0 allocs/op
+BenchmarkQJS/float_toPrecision.js-2               	  377078	     16366 ns/op	       1 B/op	       0 allocs/op
+BenchmarkQJS/float_toString.js-2                  	  249685	     22309 ns/op	       2 B/op	       0 allocs/op
+BenchmarkQJS/float_to_string.js-2                 	  347442	     19236 ns/op	       1 B/op	       0 allocs/op
+BenchmarkQJS/func_call.js-2                       	 1354558	      5524 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQJS/func_closure_call.js-2               	  932812	      5790 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQJS/global_destruct.js-2                 	  215331	     33219 ns/op	       2 B/op	       0 allocs/op
+BenchmarkQJS/global_func_call.js-2                	 1247840	      5478 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQJS/global_read.js-2                     	 2225397	      3747 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQJS/global_write.js-2                    	 1891690	      3802 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQJS/int_arith.js-2                       	    5028	   1141724 ns/op	     101 B/op	       0 allocs/op
+BenchmarkQJS/int_toString.js-2                    	  866535	     10163 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQJS/int_to_string.js-2                   	 1000000	      5999 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQJS/int_to_string2.js-2                  	 1000000	      6211 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQJS/local_destruct.js-2                  	   47655	    111839 ns/op	      10 B/op	       0 allocs/op
+BenchmarkQJS/map_set_bigint.js-2                  	      32	 482203748 ns/op	   15904 B/op	       1 allocs/op
+BenchmarkQJS/map_set_int.js-2                     	      45	 287419881 ns/op	   11309 B/op	       1 allocs/op
+BenchmarkQJS/map_set_string.js-2                  	     612	  10338730 ns/op	     831 B/op	       0 allocs/op
+BenchmarkQJS/math_min.js-2                        	    3103	   2053876 ns/op	     164 B/op	       0 allocs/op
+BenchmarkQJS/prop_clone.js-2                      	  107030	     54825 ns/op	       4 B/op	       0 allocs/op
+BenchmarkQJS/prop_create.js-2                     	   87920	     63371 ns/op	       5 B/op	       0 allocs/op
+BenchmarkQJS/prop_delete.js-2                     	   69496	     86039 ns/op	       7 B/op	       0 allocs/op
+BenchmarkQJS/prop_read.js-2                       	 2379276	      2967 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQJS/prop_update.js-2                     	  969102	      6459 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQJS/prop_write.js-2                      	 2560900	      2127 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQJS/regexp_ascii.js-2                    	     163	  31489890 ns/op	    3423 B/op	       0 allocs/op
+BenchmarkQJS/regexp_utf16.js-2                    	     217	  27049481 ns/op	    2571 B/op	       0 allocs/op
+BenchmarkQJS/string_build1.js-2                   	    2406	   2234297 ns/op	     213 B/op	       0 allocs/op
+BenchmarkQJS/string_build1x.js-2                  	    2103	   2922924 ns/op	     244 B/op	       0 allocs/op
+BenchmarkQJS/string_build2.js-2                   	    2637	   2590138 ns/op	     195 B/op	       0 allocs/op
+BenchmarkQJS/string_build2c.js-2                  	    1719	   2981226 ns/op	     299 B/op	       0 allocs/op
+BenchmarkQJS/string_build3.js-2                   	    1948	   3410889 ns/op	     264 B/op	       0 allocs/op
+BenchmarkQJS/string_build4.js-2                   	    1687	   3179929 ns/op	     301 B/op	       0 allocs/op
+BenchmarkQJS/string_build_large1.js-2             	      15	 398837939 ns/op	  162636 B/op	       3 allocs/op
+BenchmarkQJS/string_build_large2.js-2             	      15	 486274207 ns/op	  162636 B/op	       3 allocs/op
+BenchmarkQJS/string_to_float.js-2                 	 1571772	      4330 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQJS/string_to_int.js-2                   	 1608997	      4168 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQJS/typed_array_read.js-2                	  529192	      9626 ns/op	       0 B/op	       0 allocs/op
+BenchmarkQJS/typed_array_write.js-2               	  419548	     19475 ns/op	       1 B/op	       0 allocs/op
+BenchmarkGOJA/array_for.js-2                      	   27175	    251520 ns/op	     672 B/op	      79 allocs/op
+BenchmarkGOJA/array_for_in.js-2                   	    7932	    876463 ns/op	   24792 B/op	     747 allocs/op
+BenchmarkGOJA/array_for_of.js-2                   	    5660	   1009409 ns/op	   55861 B/op	     689 allocs/op
+BenchmarkGOJA/array_hole_length_decr.js-2         	    1384	   4065923 ns/op	   65764 B/op	    1840 allocs/op
+BenchmarkGOJA/array_length_decr.js-2              	    1570	   3834425 ns/op	  109403 B/op	    3412 allocs/op
+BenchmarkGOJA/array_pop.js-2                      	    2319	   2481208 ns/op	   53878 B/op	    1910 allocs/op
+BenchmarkGOJA/array_prop_create.js-2              	    1651	   3901045 ns/op	   56209 B/op	    2405 allocs/op
+BenchmarkGOJA/array_push.js-2                     	    1890	   3080406 ns/op	   29696 B/op	    1395 allocs/op
+BenchmarkGOJA/array_read.js-2                     	  498487	     12916 ns/op	      88 B/op	      11 allocs/op
+BenchmarkGOJA/array_slice.js-2                    	    3534	   1557414 ns/op	   98350 B/op	    2666 allocs/op
+BenchmarkGOJA/array_write.js-2                    	  747248	      8464 ns/op	       8 B/op	       1 allocs/op
+BenchmarkGOJA/date_now.js-2                       	 1414245	      3861 ns/op	      16 B/op	       1 allocs/op
+BenchmarkGOJA/empty_do_loop.js-2                  	 4257460	      1435 ns/op	       8 B/op	       0 allocs/op
+BenchmarkGOJA/empty_down_loop.js-2                	 4933954	      1418 ns/op	       8 B/op	       0 allocs/op
+BenchmarkGOJA/empty_down_loop2.js-2               	 3656792	      1459 ns/op	       8 B/op	       0 allocs/op
+BenchmarkGOJA/empty_loop.js-2                     	 4853532	      1415 ns/op	       8 B/op	       0 allocs/op
+BenchmarkGOJA/float_arith.js-2                    	    1320	   4581198 ns/op	   46014 B/op	    5745 allocs/op
+BenchmarkGOJA/float_toExponential.js-2            	  345154	     16268 ns/op	     137 B/op	      11 allocs/op
+BenchmarkGOJA/float_toFixed.js-2                  	  152266	     44666 ns/op	     313 B/op	      18 allocs/op
+BenchmarkGOJA/float_toPrecision.js-2              	  372592	     16559 ns/op	     129 B/op	      10 allocs/op
+BenchmarkGOJA/float_toString.js-2                 	  385953	     17376 ns/op	     120 B/op	      11 allocs/op
+BenchmarkGOJA/float_to_string.js-2                	  479271	     12681 ns/op	     168 B/op	      14 allocs/op
+BenchmarkGOJA/func_call.js-2                      	  796264	      7103 ns/op	      40 B/op	       4 allocs/op
+BenchmarkGOJA/func_closure_call.js-2              	  821974	      7521 ns/op	      40 B/op	       4 allocs/op
+BenchmarkGOJA/global_destruct.js-2                	   70192	     93407 ns/op	    4568 B/op	      59 allocs/op
+BenchmarkGOJA/global_func_call.js-2               	  698888	      9725 ns/op	      40 B/op	       4 allocs/op
+BenchmarkGOJA/global_read.js-2                    	  997432	      5402 ns/op	       8 B/op	       0 allocs/op
+BenchmarkGOJA/global_write.js-2                   	  656061	     10703 ns/op	     200 B/op	       5 allocs/op
+BenchmarkGOJA/int_arith.js-2                      	    2706	   2574566 ns/op	   21829 B/op	    2722 allocs/op
+BenchmarkGOJA/int_toString.js-2                   	  544491	     12122 ns/op	      64 B/op	       5 allocs/op
+BenchmarkGOJA/int_to_string.js-2                  	  656049	      9628 ns/op	      75 B/op	       7 allocs/op
+BenchmarkGOJA/int_to_string2.js-2                 	  800359	      7280 ns/op	     112 B/op	       7 allocs/op
+BenchmarkGOJA/local_destruct.js-2                 	   69009	     83892 ns/op	    4184 B/op	      51 allocs/op
+BenchmarkGOJA/map_set_bigint.js-2                 	     397	  15324890 ns/op	  246690 B/op	    8513 allocs/op
+BenchmarkGOJA/map_set_int.js-2                    	     769	   8408250 ns/op	  150680 B/op	    2517 allocs/op
+BenchmarkGOJA/map_set_string.js-2                 	     440	  15165905 ns/op	  195631 B/op	    6317 allocs/op
+BenchmarkGOJA/math_min.js-2                       	    1569	   3638680 ns/op	   11978 B/op	    1491 allocs/op
+BenchmarkGOJA/prop_clone.js-2                     	   50104	    127332 ns/op	    6064 B/op	     144 allocs/op
+BenchmarkGOJA/prop_create.js-2                    	   71808	     83750 ns/op	    3312 B/op	      16 allocs/op
+BenchmarkGOJA/prop_delete.js-2                    	   30483	    205919 ns/op	    6017 B/op	     143 allocs/op
+BenchmarkGOJA/prop_read.js-2                      	 1021353	      7025 ns/op	      40 B/op	       4 allocs/op
+BenchmarkGOJA/prop_update.js-2                    	  484248	     10830 ns/op	      40 B/op	       4 allocs/op
+BenchmarkGOJA/prop_write.js-2                     	 1073677	      7645 ns/op	       8 B/op	       1 allocs/op
+BenchmarkGOJA/regexp_ascii.js-2                   	     211	  28741078 ns/op	 1399131 B/op	   18748 allocs/op
+BenchmarkGOJA/regexp_utf16.js-2                   	     141	  40447981 ns/op	 1494584 B/op	   20750 allocs/op
+BenchmarkGOJA/string_build1.js-2                  	    1279	   4758717 ns/op	  552313 B/op	    2745 allocs/op
+BenchmarkGOJA/string_build1x.js-2                 	    1017	   5049253 ns/op	  552316 B/op	    2745 allocs/op
+BenchmarkGOJA/string_build2.js-2                  	    1248	   5375372 ns/op	  552314 B/op	    2745 allocs/op
+BenchmarkGOJA/string_build2c.js-2                 	    1200	   5442225 ns/op	 1085892 B/op	    2745 allocs/op
+BenchmarkGOJA/string_build3.js-2                  	    1255	   4647999 ns/op	  552314 B/op	    2745 allocs/op
+BenchmarkGOJA/string_build4.js-2                  	    1354	   4407917 ns/op	  552314 B/op	    2746 allocs/op
+BenchmarkGOJA/string_build_large1.js-2            	       2	2873784140 ns/op	1266135436 B/op	   59868 allocs/op
+BenchmarkGOJA/string_build_large2.js-2            	       4	1519494752 ns/op	1266130920 B/op	   59807 allocs/op
+BenchmarkGOJA/string_to_float.js-2                	 1000000	      5667 ns/op	      96 B/op	       6 allocs/op
+BenchmarkGOJA/string_to_int.js-2                  	 1547599	      3635 ns/op	      40 B/op	       4 allocs/op
+BenchmarkGOJA/typed_array_read.js-2               	  466310	     14810 ns/op	      88 B/op	      11 allocs/op
+BenchmarkGOJA/typed_array_write.js-2              	  442809	     13649 ns/op	     167 B/op	      20 allocs/op
+PASS
+ok  	modernc.org/quickjs/compare	1447.700s
+                                arg        CCGO        GOJA         QJS
+-----------------------------------------------------------------------
+                     array_for.js-2       1.000       1.332       0.807
+                  array_for_in.js-2       1.000       1.227       0.463
+                  array_for_of.js-2       1.000       2.770       0.346
+        array_hole_length_decr.js-2       1.000       0.647       0.548
+             array_length_decr.js-2       1.000       0.663       0.471
+                     array_pop.js-2       1.000       0.411       0.361
+             array_prop_create.js-2       1.000       2.505       1.959
+                    array_push.js-2       1.000       0.751       0.398
+                    array_read.js-2       1.000       1.007       0.648
+                   array_slice.js-2       1.000       0.665       0.296
+                   array_write.js-2       1.000       0.991       2.550
+                      date_now.js-2       1.000       0.402       0.585
+                 empty_do_loop.js-2       1.000       1.994       0.813
+               empty_down_loop.js-2       1.000       2.948       1.374
+              empty_down_loop2.js-2       1.000       0.702       0.501
+                    empty_loop.js-2       1.000       2.858       1.172
+                   float_arith.js-2       1.000       3.622       1.090
+           float_toExponential.js-2       1.000       0.473       0.416
+                 float_toFixed.js-2       1.000       1.393       0.547
+             float_toPrecision.js-2       1.000       0.524       0.518
+                float_toString.js-2       1.000       0.421       0.540
+               float_to_string.js-2       1.000       0.374       0.567
+                     func_call.js-2       1.000       0.527       0.410
+             func_closure_call.js-2       1.000       0.562       0.433
+               global_destruct.js-2       1.000       1.148       0.408
+              global_func_call.js-2       1.000       0.481       0.271
+                   global_read.js-2       1.000       0.867       0.601
+                  global_write.js-2       1.000       1.532       0.544
+                     int_arith.js-2       1.000       1.945       0.863
+                  int_toString.js-2       1.000       0.631       0.529
+                 int_to_string.js-2       1.000       0.673       0.419
+                int_to_string2.js-2       1.000       0.689       0.588
+                local_destruct.js-2       1.000       0.522       0.695
+                map_set_bigint.js-2       1.000       0.737      23.176
+                   map_set_int.js-2       1.000       0.698      23.869
+                map_set_string.js-2       1.000       0.631       0.430
+                      math_min.js-2       1.000       0.845       0.477
+                    prop_clone.js-2       1.000       1.257       0.541
+                   prop_create.js-2       1.000       1.175       0.889
+                   prop_delete.js-2       1.000       1.255       0.524
+                     prop_read.js-2       1.000       1.387       0.586
+                   prop_update.js-2       1.000       0.894       0.533
+                    prop_write.js-2       1.000       1.549       0.431
+                  regexp_ascii.js-2       1.000       0.563       0.617
+                  regexp_utf16.js-2       1.000       0.771       0.516
+                 string_build1.js-2       1.000       3.581       1.681
+                string_build1x.js-2       1.000       3.603       2.086
+                 string_build2.js-2       1.000       1.813       0.874
+                string_build2c.js-2       1.000       4.046       2.217
+                 string_build3.js-2       1.000       1.018       0.747
+                 string_build4.js-2       1.000       1.119       0.807
+           string_build_large1.js-2       1.000      32.323       4.486
+           string_build_large2.js-2       1.000      14.666       4.693
+               string_to_float.js-2       1.000       0.798       0.609
+                 string_to_int.js-2       1.000       0.559       0.640
+              typed_array_read.js-2       1.000       1.295       0.841
+             typed_array_write.js-2       1.000       1.740       2.483
+-----------------------------------------------------------------------
+                            geomean       1.000       1.134       0.800
+                                           CCGO        GOJA         QJS
