@@ -13,7 +13,6 @@ import (
 	"math"
 	"os"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -50,19 +49,11 @@ func main() {
 		}
 		m2[arg] = t
 	}
-	sums := map[string]float64{}
 	var benches []string
-	for bench, m2 := range m {
+	for bench := range m {
 		benches = append(benches, bench)
-		var sum float64
-		for _, t := range m2 {
-			sum += t
-		}
-		sums[bench] = sum
 	}
-	sort.Slice(benches, func(i, j int) bool {
-		return sums[benches[i]] < sums[benches[j]]
-	})
+	slices.Sort(benches)
 	slices.Sort(args)
 	args = slices.Compact(args)
 	fmt.Printf("%35s", "arg")
