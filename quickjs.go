@@ -42,16 +42,18 @@
 // Geomeans over a set benchmarks relative to CCGO. Detailed results available
 // in the testdata/benchmarks directory.
 //
-//  CCGO modernc.org/quickjs v0.16.0
-//  GOJA github.com/dop251/goja v0.0.0-20250630131328-58d95d85e994
-//  QJS  github.com/fastschema/qjs v0.0.3
+//	CCGO modernc.org/quickjs v0.16.0
+//	GOJA github.com/dop251/goja v0.0.0-20250630131328-58d95d85e994
+//	QJS  github.com/fastschema/qjs v0.0.3
 //
-//                       CCGO        GOJA         QJS
-//  -------------------------------------------------
-//  darwin/amd64        1.000       1.085       0.840
-//  darwin/arm64        1.000       1.020       0.852
-//  -------------------------------------------------
-//                       CCGO        GOJA         QJS
+//	                     CCGO        GOJA         QJS
+//	-------------------------------------------------
+//	darwin/amd64        1.000       1.085       0.840
+//	darwin/arm64        1.000       1.020       0.852
+//      freebsd/amd64       1.000       1.359       0.886
+//	-------------------------------------------------
+//	                     CCGO        GOJA         QJS
+//
 // # Notes
 //
 // Parts of the documentation were copied from the quickjs documentation, see
