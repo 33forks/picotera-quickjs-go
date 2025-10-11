@@ -41,7 +41,7 @@
 //
 // # Performance
 //
-// Geomeans over a set benchmarks relative to CCGO. Detailed results available
+// Geomeans over a set of benchmarks, relative to CCGO. Detailed results available
 // in the testdata/benchmarks directory.
 //
 //	CCGO: modernc.org/quickjs@v0.16.0
@@ -57,6 +57,7 @@
 //	         linux/arm64    1.000    1.335    0.950
 //	       linux/loong64    1.000    1.376   56.452
 //	       linux/ppc64le    1.000    1.229   40.762
+//	       linux/riscv64    1.000    1.149   46.454
 //	-----------------------------------------------
 //	                        CCGO     GOJA     QJS
 //
