@@ -10,7 +10,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	// "os/exec"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -91,7 +91,7 @@ func main() {
 			fail(1, "err=%v", err)
 		}
 
-		key := path.Base(fn)                // os_arch.txt
+		key := path.Base(fn)                    // os_arch.txt
 		key = key[:len(key)-len(".txt")]        // os_arch
 		key = strings.Replace(key, "_", "/", 1) // os/arch
 		a := strings.Split(string(result), "\n")
