@@ -129,7 +129,6 @@ func main() {
 			fmt.Fprintf(buf, "%s\n", v)
 			if strings.HasPrefix(v, "// # Performance") {
 				state++
-				fmt.Println("STATE++=%v\n", state)
 			}
 		case 1:
 			fmt.Fprintf(buf, `//
@@ -154,13 +153,11 @@ func main() {
 //                              CCGO     GOJA     QJS
 `)
 			state++
-			fmt.Println("STATE++=%v\n", state)
 		case 2:
 			switch {
 			case strings.HasPrefix(v, "// # Notes"):
 				fmt.Fprintf(buf, "%s\n", v)
 				state++
-				fmt.Println("STATE++=%v\n", state)
 			}
 		case 3:
 			fmt.Fprintf(buf, "%s\n", v)

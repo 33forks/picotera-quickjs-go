@@ -10,6 +10,34 @@
 //
 // See also the original [C QuickJS] library.
 //
+// # Performance
+//
+// Geomeans over a set of benchmarks, relative to CCGO. Detailed results available
+// in the testdata/benchmarks directory.
+//
+//		CCGO: modernc.org/quickjs@v0.16.0
+//		GOJA: github.com/dop251/goja@v0.0.0-20250630131328-58d95d85e994
+//		 QJS: github.com/fastschema/qjs@v0.0.3
+//
+//		                        CCGO     GOJA     QJS
+//		-----------------------------------------------
+//		        darwin/amd64    1.000    1.078    0.868
+//		        darwin/arm64    1.000    1.019    0.848
+//		       freebsd/amd64    1.000    1.289    0.866    (qemu)
+//		           linux/arm    1.000    2.241   86.755
+//		         linux/arm64    1.000    1.335    0.950
+//		       linux/loong64    1.000    1.376   56.452
+//		       linux/ppc64le    1.000    1.229   40.762
+//		       linux/riscv64    1.000    1.149   46.454
+//	            windows/amd64    1.000    1.278    0.955
+//		-----------------------------------------------
+//		                        CCGO     GOJA     QJS
+//
+// # Notes
+//
+// Parts of the documentation were copied from the quickjs documentation, see
+// LICENSE-QUICKJS for details.
+//
 // # Supported platforms and architectures
 //
 // These combinations of GOOS and GOARCH are currently supported
@@ -38,34 +66,6 @@
 // # Change Log
 //
 // 2025-10-10: Upgrade to QuickJS release 2025-09-13.
-//
-// # Performance
-//
-// Geomeans over a set of benchmarks, relative to CCGO. Detailed results available
-// in the testdata/benchmarks directory.
-//
-//	CCGO: modernc.org/quickjs@v0.16.0
-//	GOJA: github.com/dop251/goja@v0.0.0-20250630131328-58d95d85e994
-//	 QJS: github.com/fastschema/qjs@v0.0.3
-//
-//	                        CCGO     GOJA     QJS
-//	-----------------------------------------------
-//	        darwin/amd64    1.000    1.078    0.868
-//	        darwin/arm64    1.000    1.019    0.848
-//	       freebsd/amd64    1.000    1.289    0.866    (qemu)
-//	           linux/arm    1.000    2.241   86.755
-//	         linux/arm64    1.000    1.335    0.950
-//	       linux/loong64    1.000    1.376   56.452
-//	       linux/ppc64le    1.000    1.229   40.762
-//	       linux/riscv64    1.000    1.149   46.454
-//	-----------------------------------------------
-//	                        CCGO     GOJA     QJS
-//                              CCGO     GOJA     QJS
-//
-// # Notes
-//
-// Parts of the documentation were copied from the quickjs documentation, see
-// LICENSE-QUICKJS for details.
 //
 // [C QuickJS]: https://bellard.org/quickjs
 // [ES2023]: https://tc39.es/ecma262/2023/
@@ -1554,4 +1554,3 @@ func (v Value) Any() (r any, err error) {
 func (v Value) IsUndefined() bool {
 	return tag(v.v) == lib.EJS_TAG_UNDEFINED
 }
-
