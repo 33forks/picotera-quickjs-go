@@ -2,6 +2,8 @@
 // Use of the source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:generate go run generator.go
+
 // Package quickjs is a pure Go embeddable Javascript engine. It supports the
 // ECMA script 14 ([ES2023]) specification including modules, asynchronous
 // generators, proxies and BigInt.
