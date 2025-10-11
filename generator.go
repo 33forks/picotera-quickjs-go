@@ -137,22 +137,22 @@ func main() {
 // Geomeans over a set of benchmarks, relative to CCGO. Detailed results available
 // in the testdata/benchmarks directory.
 //
-//      CCGO: %s
-//      GOJA: %s
-//       QJS: %s 
-//
-//                              CCGO     GOJA     QJS
-//      -----------------------------------------------
+//  CCGO: %s
+//  GOJA: %s
+//   QJS: %s 
+//  
+//                      CCGO     GOJA     QJS
+//  -----------------------------------------------
 `,
 				ver("modernc.org/quickjs"),
 				ver("github.com/dop251/goja"),
 				ver("github.com/fastschema/qjs"),
 			)
 			for _, v := range results {
-				fmt.Fprintf(buf, "//%26s%9s%9s%9s%s\n", v[0], v[1], v[2], v[3], notes[v[0]])
+				fmt.Fprintf(buf, "//%22s%9s%9s%9s%s\n", v[0], v[1], v[2], v[3], notes[v[0]])
 			}
-			fmt.Fprintf(buf, `//      -----------------------------------------------
-//                              CCGO     GOJA     QJS
+			fmt.Fprintf(buf, `//  -----------------------------------------------
+//                      CCGO     GOJA     QJS
 //
 `)
 			state++
