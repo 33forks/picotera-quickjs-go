@@ -7,19 +7,35 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
+	"strings"
 
 	"golang.org/x/mod/modfile"
+)
+
+const (
+	docFn = "quickjs.go"
+	qemu  = "    (qemu)"
 )
 
 var (
 	goos   = runtime.GOOS
 	goarch = runtime.GOARCH
 	target = fmt.Sprintf("%s_%s", goos, goarch) + ".txt"
+	notes  = map[string]string{
+		"freebsd/amd64": qemu,
+		"freebsd/arm64": qemu,
+		"linux/386":     qemu,
+		"linux/s390x":   qemu,
+		"openbsd/amd64": qemu,
+		"windows/386":   qemu,
+	}
 )
 
 func fail(rc int, s string, args ...any) {
@@ -43,22 +59,114 @@ func main() {
 	for _, v := range mod.Require {
 		versionsByPath[v.Mod.Path] = v.Mod.Version
 	}
-	// fmt.Println(versionsByPath)
 	quickjsVersion := versionsByPath["modernc.org/quickjs"]
-	// fmt.Println(quickjsVersion)
-	results := filepath.Join("testdata", "benchmarks", quickjsVersion, target)
-	// fmt.Println(results)
-	if fi, err := os.Stat(results); err == nil && fi.Mode().IsRegular() {
+	resultsFn := filepath.Join("testdata", "benchmarks", quickjsVersion, target)
+	if fi, err := os.Stat(resultsFn); err == nil && fi.Mode().IsRegular() {
 		return // done
 	}
 
-	os.Remove(results)
-	os.MkdirAll(filepath.Dir(results), 0775)
-	out, err := exec.Command("sh", "-c", fmt.Sprintf("make benchmark > %s", results)).CombinedOutput()
+	os.Remove(resultsFn)
+	resultsDir := filepath.Dir(resultsFn)
+	os.MkdirAll(resultsDir, 0775)
+
+	out, err := exec.Command("sh", "-c", fmt.Sprintf("make benchmark > %s", resultsFn)).CombinedOutput()
 	fmt.Printf("err=%v out=%s\n", err, out)
 	if err != nil {
 		fail(1, "err=%v out=%s", err, out)
 	}
 
-	//TODO update package godocs using results.
+	var _ exec.Cmd
+
+	m, err := filepath.Glob(filepath.Join(resultsDir, "*.txt"))
+	if err != nil {
+		fail(1, "err=%v", err)
+	}
+
+	var results [][]string
+	for _, fn := range m {
+		result, err := os.ReadFile(fn)
+		if err != nil {
+			fail(1, "err=%v", err)
+		}
+
+		key := filepath.Base(fn)                // os_arch.txt
+		key = key[:len(key)-len(".txt")]        // os_arch
+		key = strings.Replace(key, "_", "/", 1) // os/arch
+		a := strings.Split(string(result), "\n")
+		for _, v := range a {
+			if f := strings.Fields(v); len(f) >= 4 && f[0] == "geomean" { // geomean 1.000 1.019 0.848
+				f[0] = key
+				results = append(results, f)
+				continue
+			}
+		}
+	}
+
+	slices.SortFunc(results, func(a, b []string) int {
+		switch {
+		case a[0] < b[0]:
+			return -1
+		case a[0] == b[0]:
+			return 0
+		default:
+			return 1
+		}
+	})
+	doc, err := os.ReadFile(docFn)
+	if err != nil {
+		fail(1, "err=%v", err)
+	}
+
+	a := strings.Split(string(doc), "\n")
+	buf := bytes.NewBuffer(nil)
+	state := 0
+	ver := func(ip string) string {
+		return fmt.Sprintf("%s@%s", ip, versionsByPath[ip])
+	}
+	for _, v := range a {
+		switch state {
+		case 0:
+			fmt.Fprintf(buf, "%s\n", v)
+			if strings.HasPrefix(v, "// # Performance") {
+				state++
+				fmt.Println("STATE++=%v\n", state)
+			}
+		case 1:
+			fmt.Fprintf(buf, `//
+// Geomeans over a set benchmarks relative to CCGO. Detailed results available
+// in the testdata/benchmarks directory.
+//
+//      CCGO: %s
+//      GOJA: %s
+//       QJS: %s 
+//
+//                              CCGO     GOJA     QJS
+//      -----------------------------------------------
+`,
+				ver("modernc.org/quickjs"),
+				ver("github.com/dop251/goja"),
+				ver("github.com/fastschema/qjs"),
+			)
+			for _, v := range results {
+				fmt.Fprintf(buf, "//%26s%9s%9s%9s%s\n", v[0], v[1], v[2], v[3], notes[v[0]])
+			}
+			fmt.Fprintf(buf, `//      -----------------------------------------------
+//                              CCGO     GOJA     QJS
+`)
+			state++
+			fmt.Println("STATE++=%v\n", state)
+		case 2:
+			switch {
+			case strings.HasPrefix(v, "// # Notes"):
+				fmt.Fprintf(buf, "%s\n", v)
+				state++
+				fmt.Println("STATE++=%v\n", state)
+			}
+		case 3:
+			fmt.Fprintf(buf, "%s\n", v)
+		}
+	}
+	if err := os.WriteFile(docFn, buf.Bytes(), 0660); err != nil {
+		fail(1, "err=%v", err)
+	}
 }
