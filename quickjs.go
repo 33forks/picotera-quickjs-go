@@ -19,7 +19,7 @@
 //	GOJA: github.com/dop251/goja@v0.0.0-20250630131328-58d95d85e994
 //	 QJS: github.com/fastschema/qjs@v0.0.3
 //
-//	                    CCGO     GOJA     QJS
+//	                        CCGO     GOJA     QJS
 //	-----------------------------------------------
 //	        darwin/amd64    1.000    1.078    0.868
 //	        darwin/arm64    1.000    1.019    0.848
@@ -36,7 +36,7 @@
 //	       windows/amd64    1.000    1.278    0.955
 //	       windows/arm64    1.000    1.255    1.003
 //	-----------------------------------------------
-//	                    CCGO     GOJA     QJS
+//	                        CCGO     GOJA     QJS
 //
 // # Notes
 //
