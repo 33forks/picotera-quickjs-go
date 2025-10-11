@@ -60,13 +60,13 @@ func main() {
 		versionsByPath[v.Mod.Path] = v.Mod.Version
 	}
 	quickjsVersion := versionsByPath["modernc.org/quickjs"]
-	resultsFn := filepath.Join("testdata", "benchmarks", quickjsVersion, target)
+	resultsDir := filepath.Join("testdata", "benchmarks", quickjsVersion)
+	resultsFn := filepath.Join(resultsDir, target)
 	if fi, err := os.Stat(resultsFn); err == nil && fi.Mode().IsRegular() {
 		return // done
 	}
 
 	os.Remove(resultsFn)
-	resultsDir := filepath.Dir(resultsFn)
 	os.MkdirAll(resultsDir, 0775)
 
 	out, err := exec.Command("sh", "-c", fmt.Sprintf("make benchmark > %s", resultsFn)).CombinedOutput()
