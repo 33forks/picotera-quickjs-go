@@ -15,9 +15,9 @@
 // Geomeans over a set of benchmarks, relative to CCGO. Detailed results available
 // in the testdata/benchmarks directory.
 //
-//	CCGO: modernc.org/quickjs@v0.16.0
-//	GOJA: github.com/dop251/goja@v0.0.0-20250630131328-58d95d85e994
-//	 QJS: github.com/fastschema/qjs@v0.0.3
+//      CCGO: modernc.org/quickjs@v0.16.0
+//      GOJA: github.com/dop251/goja@v0.0.0-20250630131328-58d95d85e994
+//       QJS: github.com/fastschema/qjs@v0.0.3 
 //
 //	                        CCGO     GOJA     QJS
 //	-----------------------------------------------
@@ -32,8 +32,9 @@
 //	       linux/riscv64    1.000    1.149   46.454
 //	         linux/s390x    1.000    1.260   44.298    (qemu)
 //	       windows/amd64    1.000    1.278    0.955
-//	-----------------------------------------------
-//	                        CCGO     GOJA     QJS
+//             windows/arm64    1.000    1.255    1.003
+//      -----------------------------------------------
+//                              CCGO     GOJA     QJS
 //
 // # Notes
 //
@@ -1556,3 +1557,4 @@ func (v Value) Any() (r any, err error) {
 func (v Value) IsUndefined() bool {
 	return tag(v.v) == lib.EJS_TAG_UNDEFINED
 }
+
