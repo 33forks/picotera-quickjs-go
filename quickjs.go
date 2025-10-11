@@ -60,6 +60,7 @@
 //	       linux/riscv64    1.000    1.149   46.454
 //	-----------------------------------------------
 //	                        CCGO     GOJA     QJS
+//                              CCGO     GOJA     QJS
 //
 // # Notes
 //
@@ -1553,3 +1554,4 @@ func (v Value) Any() (r any, err error) {
 func (v Value) IsUndefined() bool {
 	return tag(v.v) == lib.EJS_TAG_UNDEFINED
 }
+
