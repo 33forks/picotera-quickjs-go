@@ -10,7 +10,8 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
+	// "os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -44,13 +45,13 @@ func fail(rc int, s string, args ...any) {
 }
 
 func main() {
-	fn := filepath.Join("compare", "go.mod")
+	fn := path.Join("compare", "go.mod")
 	b, err := os.ReadFile(fn)
 	if err != nil {
 		fail(1, "%v", err)
 	}
 
-	mod, err := modfile.ParseLax(filepath.Join(fn), b, nil)
+	mod, err := modfile.ParseLax(fn, b, nil)
 	if err != nil {
 		fail(1, "%v", err)
 	}
@@ -60,8 +61,8 @@ func main() {
 		versionsByPath[v.Mod.Path] = v.Mod.Version
 	}
 	quickjsVersion := versionsByPath["modernc.org/quickjs"]
-	resultsDir := filepath.Join("testdata", "benchmarks", quickjsVersion)
-	resultsFn := filepath.Join(resultsDir, target)
+	resultsDir := path.Join("testdata", "benchmarks", quickjsVersion)
+	resultsFn := path.Join(resultsDir, target)
 	if fi, err := os.Stat(resultsFn); err == nil && fi.Mode().IsRegular() {
 		return // done
 	}
@@ -75,13 +76,14 @@ func main() {
 		fail(1, "err=%v out=%s", err, out)
 	}
 
-	var _ exec.Cmd
-
-	m, err := filepath.Glob(filepath.Join(resultsDir, "*.txt"))
+	m, err := filepath.Glob(path.Join(resultsDir, "*.txt"))
 	if err != nil {
 		fail(1, "err=%v", err)
 	}
 
+	for i, v := range m {
+		m[i] = filepath.ToSlash(v)
+	}
 	var results [][]string
 	for _, fn := range m {
 		result, err := os.ReadFile(fn)
@@ -89,7 +91,7 @@ func main() {
 			fail(1, "err=%v", err)
 		}
 
-		key := filepath.Base(fn)                // os_arch.txt
+		key := path.Base(fn)                // os_arch.txt
 		key = key[:len(key)-len(".txt")]        // os_arch
 		key = strings.Replace(key, "_", "/", 1) // os/arch
 		a := strings.Split(string(result), "\n")
@@ -151,6 +153,7 @@ func main() {
 			}
 			fmt.Fprintf(buf, `//      -----------------------------------------------
 //                              CCGO     GOJA     QJS
+//
 `)
 			state++
 		case 2:
