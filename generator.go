@@ -134,8 +134,8 @@ func main() {
 			}
 		case 1:
 			fmt.Fprintf(buf, `//
-// Geomeans over a set of benchmarks, relative to CCGO. Detailed results available
-// in the testdata/benchmarks directory.
+// Geomeans of time/op over a set of benchmarks, relative to CCGO, lower number
+// is better. Detailed results available in the testdata/benchmarks directory.
 //
 //  CCGO: %s
 //  GOJA: %s
