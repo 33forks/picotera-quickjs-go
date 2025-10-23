@@ -15,23 +15,25 @@
 // Geomeans of time/op over a set of benchmarks, relative to CCGO, lower number
 // is better. Detailed results available in the testdata/benchmarks directory.
 //
-//  CCGO: modernc.org/quickjs@v0.16.3
-//  GOJA: github.com/dop251/goja@v0.0.0-20251008123653-cf18d89f3cf6
-//   QJS: github.com/fastschema/qjs@v0.0.5 
-//  
-//	                        CCGO     GOJA     QJS
-//	-----------------------------------------------
-//	        darwin/amd64    1.000    1.169    0.952
-//	        darwin/arm64    1.000    1.106    0.928
-//	       freebsd/amd64    1.000    1.271    0.866    (qemu)
-//	       freebsd/arm64    1.000    1.064    0.746    (qemu)
-//	           linux/386    1.000    1.738   59.275    (qemu)
-//	         linux/amd64    1.000    1.867    1.003
-//	           linux/arm    1.000    2.215   85.887
-//	         linux/arm64    1.000    1.315    1.023
-//	       windows/amd64    1.000    1.338    1.034
-//	-----------------------------------------------
-//	                        CCGO     GOJA     QJS
+//	 CCGO: modernc.org/quickjs@v0.16.3
+//	 GOJA: github.com/dop251/goja@v0.0.0-20251008123653-cf18d89f3cf6
+//	  QJS: github.com/fastschema/qjs@v0.0.5
+//
+//		                        CCGO     GOJA     QJS
+//		-----------------------------------------------
+//		        darwin/amd64    1.000    1.169    0.952
+//		        darwin/arm64    1.000    1.106    0.928
+//		       freebsd/amd64    1.000    1.271    0.866    (qemu)
+//		       freebsd/arm64    1.000    1.064    0.746    (qemu)
+//		           linux/386    1.000    1.738   59.275    (qemu)
+//		         linux/amd64    1.000    1.867    1.003
+//		           linux/arm    1.000    2.215   85.887
+//		         linux/arm64    1.000    1.315    1.023
+//		       linux/ppc64le    1.000    1.306   44.612
+//		       windows/amd64    1.000    1.338    1.034
+//		-----------------------------------------------
+//		                        CCGO     GOJA     QJS
+//
 // # Notes
 //
 // Parts of the documentation were copied from the quickjs documentation, see
@@ -1553,4 +1555,3 @@ func (v Value) Any() (r any, err error) {
 func (v Value) IsUndefined() bool {
 	return tag(v.v) == lib.EJS_TAG_UNDEFINED
 }
-
