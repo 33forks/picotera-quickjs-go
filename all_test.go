@@ -6,6 +6,7 @@ package quickjs // import "modernc.org/quickjs"
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"os"
@@ -725,6 +726,38 @@ func TestGetProperty(t *testing.T) {
 	}
 
 	if g, e := v, "bar"; g != e {
+		t.Fatal(g, e)
+	}
+}
+
+func TestBytecode(t *testing.T) {
+	m, err := NewVM()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer m.Close()
+
+	bytecode, err := m.Compile("42 * 314;", EvalGlobal)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Hello future reader: this will change if you update the QuickJS version.
+	// You just need to update the expected value below!
+	// You can also use this chance to document that something changed.
+	// See: https://gitlab.com/cznic/quickjs/-/merge_requests/3#note_2862847634
+	hex := hex.EncodeToString(bytecode)
+	if g, e := hex, "05000c000600a4010001000200000801a601000000bf2ac03a019ccf28a4010400001b0600"; g != e {
+		t.Fatalf("got %s, expected %s", g, e)
+	}
+
+	v, err := m.EvalBytecode(bytecode)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if g, e := v, 42*314; g != e {
 		t.Fatal(g, e)
 	}
 }

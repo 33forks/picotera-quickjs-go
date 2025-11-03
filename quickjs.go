@@ -541,6 +541,115 @@ func (m *VM) EvalThisValue(obj Value, javascript string, flags int) (r Value, er
 	return Value{vm: m, v: v}, nil
 }
 
+// EvalBytecode is like Eval but uses QuickJS bytecode.
+//
+// Note: The bytecode format is linked to a given QuickJS version. Moreover, no security check is done before
+// its execution. Hence the bytecode should not be loaded from untrusted sources.
+//
+// Note: Javascript 'this' is always set to the global context.
+func (m *VM) EvalBytecode(bytecode []byte) (r any, err error) {
+	v, err := m.EvalBytecodeValue(bytecode)
+	if err != nil {
+		return nil, err
+	}
+
+	return m.value(v.v, true)
+}
+
+// EvalBytecodeValue is like EvalValue but operates on QuickJS bytecode.
+//
+// Exceptions thrown during evaluation of the script are returned as Go errors.
+//
+// If no error is returned, the caller must properly handle the returned Value
+// using Dup/Free.
+//
+// Note: See the [Value] documentation for details about manual memory
+// management of Value objects.
+func (m *VM) EvalBytecodeValue(bytecode []byte) (r Value, err error) {
+	tls := m.runtime.tls
+	ctx := m.cContext
+	ps, err := libc.CString(string(bytecode))
+	if err != nil {
+		return r, fmt.Errorf("OOM")
+	}
+
+	defer libc.Xfree(tls, ps)
+
+	// https://github.com/bellard/quickjs/blob/eb2c89087def1829ed99630cb14b549d7a98408c/quickjs-libc.c#L4292
+	obj := lib.XJS_ReadObject(tls, ctx, ps, lib.Tsize_t(len(bytecode)), lib.MJS_READ_OBJ_BYTECODE)
+	if isException(obj) {
+		return r, m.errFromException()
+	}
+
+	m.configureInterrupt()
+
+	var v lib.TJSValue
+	if tag(obj) == lib.EJS_TAG_MODULE {
+		if lib.XJS_ResolveModule(tls, ctx, obj) < 0 {
+			lib.XFreeValue(tls, ctx, obj)
+			return r, m.errFromException()
+		}
+
+		lib.Xjs_module_set_import_meta(tls, ctx, obj, 0, 1)
+		// 'this' is set to ctx->global_obj
+		// see https://github.com/bellard/quickjs/blob/eb2c89087def1829ed99630cb14b549d7a98408c/quickjs.c#L36045
+		v = lib.XJS_EvalFunction(tls, ctx, obj)
+		v = lib.Xjs_std_await(tls, ctx, v)
+	} else {
+		v = lib.XJS_EvalFunction(tls, ctx, obj)
+	}
+
+	if isException(v) {
+		lib.XFreeValue(tls, ctx, v)
+		return r, m.errFromException()
+	}
+
+	return Value{vm: m, v: v}, nil
+}
+
+// Compile compiles the bytecode representation of the passed script.
+//
+// The returned bytecode can be later executed using EvalBytecode or EvalBytecodeValue.
+//
+// Note: The bytecode format is linked to a given QuickJS version.
+func (m *VM) Compile(javascript string, flags int) ([]byte, error) {
+	tls := m.runtime.tls
+	ctx := m.cContext
+	// https://github.com/bellard/quickjs/blob/eb2c89087def1829ed99630cb14b549d7a98408c/qjsc.c#L346-L360
+
+	flags |= lib.MJS_EVAL_FLAG_COMPILE_ONLY
+
+	v, err := m.eval(javascript, flags)
+	if err != nil {
+		return nil, err
+	}
+
+	defer lib.XFreeValue(tls, ctx, v)
+
+	if isException(v) {
+		return nil, m.errFromException()
+	}
+
+	// https://github.com/bellard/quickjs/blob/eb2c89087def1829ed99630cb14b549d7a98408c/qjsc.c#L193
+	flags2 := int32(lib.MJS_WRITE_OBJ_BYTECODE)
+	usize := int(unsafe.Sizeof(libc.Tsize_t(0)))
+	plen := tls.Alloc(usize)
+	defer tls.Free(usize)
+
+	p := lib.XJS_WriteObject(tls, ctx, plen, v, flags2)
+	if p == 0 {
+		return nil, fmt.Errorf("OOM")
+	}
+
+	plen2 := int(*(*libc.Tsize_t)(unsafe.Pointer(plen)))
+	b := libc.GoBytes(p, plen2)
+	bcopy := make([]byte, len(b))
+	copy(bcopy, b)
+
+	lib.Xjs_free(tls, ctx, p)
+	return bcopy, nil
+}
+
 func (m *VM) eval(js string, flags int) (r lib.TJSValue, err error) {
 	tls := m.runtime.tls
 	ctx := m.cContext
@@ -1558,4 +1667,9 @@ func (v Value) Any() (r any, err error) {
 // IsUndefined reports whether 'v' represents the Javascript value 'undefined'.
 func (v Value) IsUndefined() bool {
 	return tag(v.v) == lib.EJS_TAG_UNDEFINED
+}
+
+// Version returns the underlying QuickJS version.
+func Version() string {
+	return lib.MCONFIG_VERSION
 }
