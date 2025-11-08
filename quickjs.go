@@ -298,6 +298,13 @@ func (o *Object) MarshalJSON() (r []byte, err error) {
 	return []byte(o.json), nil
 }
 
+// Into helps you quickly deserialize an Object into a native Go type.
+// This uses encoding/json.Unmarshal internally, so the target type must be
+// compatible with that package.
+func (o *Object) Into(v any) error {
+	return json.Unmarshal([]byte(o.json), v)
+}
+
 // return != 0 if the JS code needs to be interrupted
 func interruptHandler(tls *libc.TLS, rt, opaque uintptr) int32 {
 	if opaque == 0 {

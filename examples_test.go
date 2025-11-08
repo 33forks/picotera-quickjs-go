@@ -32,6 +32,21 @@ func ExampleObject_String() {
 	// {"a":356,"b":"foo"}
 }
 
+// JSON unmarshalling into native Go struct.
+func ExampleObject_Into() {
+	m, _ := NewVM()
+	defer m.Close()
+	obj, _ := m.Eval("obj = {a: 42+314, b: 'foo'}; obj;", EvalGlobal)
+	var dst struct {
+		A int    `json:"a"`
+		B string `json:"b"`
+	}
+	obj.(*Object).Into(&dst)
+	fmt.Printf("%#v\n", dst)
+	// Output:
+	// struct { A int "json:\"a\""; B string "json:\"b\"" }{A:356, B:"foo"}
+}
+
 // Call a Javascript function.
 func ExampleVM_Call_function() {
 	m, _ := NewVM()
