@@ -4,8 +4,8 @@ go 1.24.0
 
 require (
 	modernc.org/fileutil v1.3.40
-	modernc.org/libc v1.67.6
-	modernc.org/libquickjs v0.12.3
+	modernc.org/libc v1.67.7
+	modernc.org/libquickjs v0.12.4
 )
 
 require (
