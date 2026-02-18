@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
+	_ "golang.org/x/mod/modfile" // generator.go
 	util "modernc.org/fileutil/ccgo"
 	lib "modernc.org/libquickjs"
-	_ "golang.org/x/mod/modfile" // generator.go
 )
 
 var (
