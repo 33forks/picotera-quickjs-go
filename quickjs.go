@@ -104,23 +104,13 @@ var (
 	goFuncs   = map[int32]*goFunc{}
 	freeMagic = map[int32]struct{}{}
 
-	// Registry for mapping C Context pointers back to the Go VM struct.
-	vmsMu sync.RWMutex
-	vms   = map[uintptr]*VM{}
+	customLoadersMu sync.Mutex
+	customLoaders   = map[uintptr]moduleLoaderState{}
 
 	// UndefinedValue is a Value representing Javascript value 'undefined'. It is
 	// not associated with any particular VM.
 	UndefinedValue = Value{v: undefined}
 )
-
-// ModuleLoaderFunc defines the signature for a custom module loader.
-// It must return the module's source code (Javascript).
-type ModuleLoaderFunc func(vm *VM, moduleName string) (string, error)
-
-// ModuleNormalizeFunc defines the signature for a custom module normalizer.
-// It receives the base name (the module making the import) and the requested name,
-// and should return the normalized, absolute module name.
-type ModuleNormalizeFunc func(vm *VM, moduleBaseName, moduleName string) (string, error)
 
 // runtime represents a Javascript runtime.
 //
@@ -348,14 +338,12 @@ type VM struct {
 	cContext uintptr // lib.TJSContext
 	goFuncs  map[string]int32
 	// Safe to share, not reference counted
-	int32_16        lib.TJSValue
-	int32_2         lib.TJSValue
-	runtime         *runtime
-	timeout         time.Duration
-	interruptData   uintptr
-	toStringArgv    uintptr
-	moduleLoader    ModuleLoaderFunc
-	moduleNormalize ModuleNormalizeFunc
+	int32_16      lib.TJSValue
+	int32_2       lib.TJSValue
+	runtime       *runtime
+	timeout       time.Duration
+	interruptData uintptr
+	toStringArgv  uintptr
 }
 
 // NewVM returns a newly created VM.
@@ -370,10 +358,6 @@ func NewVM() (*VM, error) {
 		rt.close()
 		return nil, err
 	}
-
-	vmsMu.Lock()
-	vms[vm.cContext] = vm
-	vmsMu.Unlock()
 
 	lib.XJS_SetInterruptHandler(rt.tls, rt.cRuntime, fp(interruptHandler), vm.interruptData)
 	return vm, nil
@@ -435,11 +419,6 @@ func (m *VM) SetCanBlock(value bool) {
 func (m *VM) Close() error {
 	tls := m.runtime.tls
 	ctx := m.cContext
-
-	vmsMu.Lock()
-	delete(vms, ctx)
-	vmsMu.Unlock()
-
 	var a []int32
 	var b []*goFunc
 	for _, k := range m.goFuncs {
@@ -1101,19 +1080,6 @@ func throwInternalError(tls *libc.TLS, ctx uintptr, msg string, args ...any) (r 
 	return lib.XJS_ThrowInternalError(tls, ctx, p, libc.VaList(bp+8, args...))
 }
 
-func throwReferenceError(tls *libc.TLS, ctx uintptr, msg string, args ...any) (r lib.TJSValue) {
-	p, err := libc.CString(msg)
-	if err != nil {
-		return lib.XJS_ThrowReferenceError(tls, ctx, 0, 0)
-	}
-	defer libc.Xfree(tls, p)
-
-	bp := tls.Alloc(8 + 8*len(args))
-	defer tls.Free(8 + 8*len(args))
-
-	return lib.XJS_ThrowReferenceError(tls, ctx, p, libc.VaList(bp+8, args...))
-}
-
 type goFunc struct {
 	cName        uintptr
 	f            reflect.Value
@@ -1282,13 +1248,11 @@ func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uint
 	m := info.vm
 	haveArgs := int(argc)
 	if haveArgs < info.minArgs {
-		trc("wantThis=%v haveArgs=%v minArgs=%v maxArgs=%v argc=%v", info.wantThis, haveArgs, info.minArgs, info.maxArgs, argc)
-		return throwTypeError(tls, ctx, fmt.Sprintf("not enough arguments in call to %s", info.name))
+		return throwTypeError(tls, ctx, "%s", fmt.Sprintf("not enough arguments in call to %s", info.name))
 	}
 
 	if info.maxArgs >= 0 && haveArgs > info.maxArgs {
-		// trc("wantThis=%v haveArgs=%v minArgs=%v maxArgs=%v argc=%v", info.wantThis, haveArgs, info.minArgs, info.maxArgs, argc)
-		return throwTypeError(tls, ctx, fmt.Sprintf("too many arguments in call to %s", info.name))
+		return throwTypeError(tls, ctx, "%s", fmt.Sprintf("too many arguments in call to %s", info.name))
 	}
 
 	var in []reflect.Value
@@ -1302,12 +1266,12 @@ func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uint
 		default:
 			v, err := m.value(this, false)
 			if err != nil {
-				return throwTypeError(tls, ctx, fmt.Sprintf("calling %s: argument conversion error: %v", info.name, err))
+				return throwTypeError(tls, ctx, "%s", fmt.Sprintf("calling %s: argument conversion error: %v", info.name, err))
 			}
 
 			rv := reflect.ValueOf(v)
 			if !rv.Type().AssignableTo(info.in[0]) {
-				return throwTypeError(tls, ctx, fmt.Sprintf("calling %s: cannot assign %s to %s", info.name, rv.Type(), info.in[0]))
+				return throwTypeError(tls, ctx, "%s", fmt.Sprintf("calling %s: cannot assign %s to %s", info.name, rv.Type(), info.in[0]))
 			}
 
 			in = append(in, rv)
@@ -1331,12 +1295,12 @@ func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uint
 		default:
 			v, err := m.value(*(*lib.TJSValue)(unsafe.Pointer(argv)), false)
 			if err != nil {
-				return throwTypeError(tls, ctx, fmt.Sprintf("calling %s: argument conversion error: %v", info.name, err))
+				return throwTypeError(tls, ctx, "%s", fmt.Sprintf("calling %s: argument conversion error: %v", info.name, err))
 			}
 
 			rv := reflect.ValueOf(v)
 			if !rv.Type().AssignableTo(typ) {
-				return throwTypeError(tls, ctx, fmt.Sprintf("calling %s: cannot assign %s to %s", info.name, rv.Type(), typ))
+				return throwTypeError(tls, ctx, "%s", fmt.Sprintf("calling %s: cannot assign %s to %s", info.name, rv.Type(), typ))
 			}
 
 			in = append(in, rv)
@@ -1354,21 +1318,21 @@ func callGo(tls *libc.TLS, ctx uintptr, this lib.TJSValue, argc int32, argv uint
 		case isNative(info.out[0]):
 			x, ok := out[0].Interface().(Value)
 			if !ok {
-				return throwTypeError(tls, ctx, fmt.Sprintf("internal error: native Javascript value does not have type 'Value' (%v:)", origin(1)))
+				return throwTypeError(tls, ctx, "%s", fmt.Sprintf("internal error: native Javascript value does not have type 'Value' (%v:)", origin(1)))
 			}
 
 			r = x.v
 		default:
 			r, err = m.jsValue(out[0])
 			if err != nil {
-				return throwTypeError(tls, ctx, fmt.Sprintf("cannot convert value: %v", err))
+				return throwTypeError(tls, ctx, "%s", fmt.Sprintf("cannot convert value: %v", err))
 			}
 		}
 	default:
 		r, err = m.jsArray(out)
 	}
 	if err != nil {
-		return throwTypeError(tls, ctx, fmt.Sprintf("callback %s: %v", info.name, err))
+		return throwTypeError(tls, ctx, "%s", fmt.Sprintf("callback %s: %v", info.name, err))
 	}
 
 	return r
@@ -1508,108 +1472,6 @@ func (m *VM) jsArrayOf(a []lib.TJSValue) (out lib.TJSValue, err error) {
 // loader.
 func (m *VM) SetDefaultModuleLoader() {
 	lib.XJS_SetModuleLoaderFunc2(m.runtime.tls, m.runtime.cRuntime, 0, fp(lib.Xjs_module_loader), 0, 0)
-}
-
-// SetModuleLoader configures custom Go functions to load and normalize Javascript modules.
-// Passing nil for 'loader' removes the custom loader. If 'normalize' is nil, the engine
-// falls back to the default QuickJS module normalizer.
-func (m *VM) SetModuleLoader(loader ModuleLoaderFunc, normalize ModuleNormalizeFunc) {
-	m.moduleLoader = loader
-	m.moduleNormalize = normalize
-
-	var fpNormalize, fpLoader uintptr
-	if normalize != nil {
-		fpNormalize = fp(goModuleNormalize)
-	}
-	if loader != nil {
-		fpLoader = fp(goModuleLoader)
-	}
-
-	lib.XJS_SetModuleLoaderFunc2(
-		m.runtime.tls,
-		m.runtime.cRuntime,
-		fpNormalize,
-		fpLoader,
-		0,          // check_attrs
-		m.cContext, // Pass context as opaque data for the callback registry lookup
-	)
-}
-
-func goModuleNormalize(tls *libc.TLS, ctx uintptr, module_base_name uintptr, module_name uintptr, opaque uintptr) uintptr {
-	vmsMu.RLock()
-	vm := vms[opaque]
-	vmsMu.RUnlock()
-
-	if vm == nil || vm.moduleNormalize == nil {
-		return 0
-	}
-
-	baseName := libc.GoString(module_base_name)
-	name := libc.GoString(module_name)
-
-	normalized, err := vm.moduleNormalize(vm, baseName, name)
-	if err != nil {
-		throwReferenceError(tls, ctx, fmt.Sprintf("could not normalize module '%s': %v", name, err))
-		return 0
-	}
-
-	p, err := libc.CString(normalized)
-	if err != nil {
-		throwInternalError(tls, ctx, "OOM")
-		return 0
-	}
-	defer libc.Xfree(tls, p)
-
-	// QuickJS expects normalize functions to return a string allocated by js_malloc
-	sz := libc.Xstrlen(tls, p) + 1
-	res := lib.Xjs_malloc(tls, ctx, libc.Tsize_t(sz))
-	if res == 0 {
-		throwInternalError(tls, ctx, "OOM")
-		return 0
-	}
-	libc.Xmemcpy(tls, res, p, libc.Tsize_t(sz))
-	return res
-}
-
-func goModuleLoader(tls *libc.TLS, ctx uintptr, module_name uintptr, opaque uintptr) uintptr {
-	vmsMu.RLock()
-	vm := vms[opaque]
-	vmsMu.RUnlock()
-
-	if vm == nil || vm.moduleLoader == nil {
-		return 0
-	}
-
-	name := libc.GoString(module_name)
-	source, err := vm.moduleLoader(vm, name)
-	if err != nil {
-		throwReferenceError(tls, ctx, fmt.Sprintf("module '%s' not found: %v", name, err))
-		return 0
-	}
-
-	ps, err := libc.CString(source)
-	if err != nil {
-		throwInternalError(tls, ctx, "OOM")
-		return 0
-	}
-	defer libc.Xfree(tls, ps)
-
-	flags := int32(lib.MJS_EVAL_TYPE_MODULE | lib.MJS_EVAL_FLAG_COMPILE_ONLY)
-	val := lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(source)), module_name, flags)
-
-	if isException(val) {
-		lib.XFreeValue(tls, ctx, val)
-		return 0
-	}
-
-	// JS_Eval with COMPILE_ONLY returns a JSValue containing the JSModuleDef pointer.
-	// Since QuickJS places the payload at offset 0 (for both struct formatting and 64-bit NaN-boxing),
-	// this securely extracts the raw pointer.
-	ptr := *(*uintptr)(unsafe.Pointer(&val))
-
-	// The module is now referenced internally by the engine, free the top-level JSValue shell
-	lib.XFreeValue(tls, ctx, val)
-	return ptr
 }
 
 // Atom is an unique identifier of, for example, a string value. Atom values
@@ -1818,4 +1680,135 @@ func (v Value) IsUndefined() bool {
 // Version returns the underlying QuickJS version.
 func Version() string {
 	return lib.MCONFIG_VERSION
+}
+
+// ModuleLoaderFunc defines the signature for a custom module loader.
+// It must return the module's source code (Javascript).
+type ModuleLoaderFunc func(vm *VM, moduleName string) (string, error)
+
+// ModuleNormalizeFunc defines the signature for a custom module normalizer.
+// It receives the base name (the module making the import) and the requested name,
+// and should return the normalized, absolute module name.
+type ModuleNormalizeFunc func(vm *VM, moduleBaseName, moduleName string) (string, error)
+
+type moduleLoaderState struct {
+	vm        *VM
+	loader    ModuleLoaderFunc
+	normalize ModuleNormalizeFunc
+}
+
+// jsMallocString allocates a C string using the QuickJS allocator so that QuickJS
+// can safely call js_free() on it. We use lib.Xjs_strdup to let the C side handle
+// the 32-bit/64-bit memory tracking alignment natively.
+func jsMallocString(tls *libc.TLS, ctx uintptr, s string) uintptr {
+	temp, err := libc.CString(s)
+	if err != nil {
+		return 0
+	}
+	defer libc.Xfree(tls, temp)
+
+	// Duplicate the string natively into the QuickJS memory pool
+	return lib.Xjs_strdup(tls, ctx, temp)
+}
+
+// SetModuleLoader configures custom Go functions to load and normalize Javascript modules.
+// Passing nil for 'loader' removes the custom loader. If 'normalize' is nil, the engine
+// falls back to the default QuickJS module normalizer.
+func (m *VM) SetModuleLoader(loader ModuleLoaderFunc, normalize ModuleNormalizeFunc) {
+	customLoadersMu.Lock()
+	defer customLoadersMu.Unlock()
+
+	if loader == nil {
+		delete(customLoaders, m.runtime.cRuntime)
+		lib.XJS_SetModuleLoaderFunc2(m.runtime.tls, m.runtime.cRuntime, 0, 0, 0, 0)
+		return
+	}
+
+	customLoaders[m.runtime.cRuntime] = moduleLoaderState{
+		vm:        m,
+		loader:    loader,
+		normalize: normalize,
+	}
+
+	var normFp uintptr
+	if normalize != nil {
+		normFp = fp(customModuleNormalize)
+	}
+
+	lib.XJS_SetModuleLoaderFunc2(
+		m.runtime.tls,
+		m.runtime.cRuntime,
+		normFp,
+		fp(customModuleLoader),
+		0,
+		m.runtime.cRuntime, // opaque
+	)
+}
+
+func customModuleNormalize(tls *libc.TLS, ctx uintptr, module_base_name, module_name uintptr, opaque uintptr) uintptr {
+	customLoadersMu.Lock()
+	state, ok := customLoaders[opaque]
+	customLoadersMu.Unlock()
+
+	if !ok || state.normalize == nil {
+		return 0
+	}
+
+	baseName := ""
+	if module_base_name != 0 {
+		baseName = libc.GoString(module_base_name)
+	}
+	name := ""
+	if module_name != 0 {
+		name = libc.GoString(module_name)
+	}
+
+	normName, err := state.normalize(state.vm, baseName, name)
+	if err != nil {
+		throwTypeError(tls, ctx, "%s", fmt.Sprintf("module normalization failed: %v", err))
+		return 0
+	}
+
+	return jsMallocString(tls, ctx, normName)
+}
+
+func customModuleLoader(tls *libc.TLS, ctx uintptr, module_name uintptr, opaque uintptr, attrs lib.TJSValue) uintptr {
+	customLoadersMu.Lock()
+	state, ok := customLoaders[opaque]
+	customLoadersMu.Unlock()
+
+	if !ok || state.loader == nil {
+		return 0
+	}
+
+	name := ""
+	if module_name != 0 {
+		name = libc.GoString(module_name)
+	}
+
+	source, err := state.loader(state.vm, name)
+	if err != nil {
+		throwTypeError(tls, ctx, "%s", fmt.Sprintf("module load failed: %v", err))
+		return 0
+	}
+
+	ps, err := libc.CString(source)
+	if err != nil {
+		throwInternalError(tls, ctx, "OOM")
+		return 0
+	}
+	defer libc.Xfree(tls, ps)
+
+	flags := int32(lib.MJS_EVAL_TYPE_MODULE | lib.MJS_EVAL_FLAG_COMPILE_ONLY)
+	v := lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(source)), module_name, flags)
+
+	if isException(v) {
+		lib.XFreeValue(tls, ctx, v)
+		return 0
+	}
+
+	ptr := jsvToPtr(v)
+	lib.XFreeValue(tls, ctx, v)
+
+	return ptr
 }

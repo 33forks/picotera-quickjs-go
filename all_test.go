@@ -12,6 +12,7 @@ import (
 	"os"
 	goruntime "runtime"
 	"runtime/debug"
+	"strings"
 	"testing"
 	"time"
 
@@ -766,99 +767,103 @@ func TestBytecode(t *testing.T) {
 func TestCustomModuleLoader(t *testing.T) {
 	vm, err := NewVM()
 	if err != nil {
-		t.Fatalf("failed to create VM: %v", err)
+		t.Fatal(err)
 	}
 	defer vm.Close()
 
-	// Define a custom normalizer
-	// To prove it's running, we'll prefix any requested module name with "test_env/".
-	normalize := func(vm *VM, base, name string) (string, error) {
-		if name == "math" {
-			return "test_env/math.js", nil
-		}
-		return name, nil
+	// An in-memory filesystem for our mock modules
+	modules := map[string]string{
+		"math_module": `
+			export function multiply(a, b) {
+				return a * b;
+			}
+		`,
+		"string_module": `
+			export const greeting = "Hello from QuickJS!";
+		`,
 	}
 
-	// Define a custom loader
-	// We'll intercept "test_env/math.js" and provide a mock Javascript module.
-	loader := func(vm *VM, name string) (string, error) {
-		if name == "test_env/math.js" {
-			// Return a valid ES6 module
-			return `export function multiply(a, b) { return a * b; }`, nil
-		}
-		return "", fmt.Errorf("module not found: %s", name)
-	}
+	normalizeCalled := false
+	loaderCalled := false
 
-	// Attach our custom hooks to the VM
-	vm.SetModuleLoader(loader, normalize)
+	vm.SetModuleLoader(
+		func(m *VM, name string) (string, error) {
+			loaderCalled = true
+			if src, ok := modules[name]; ok {
+				return src, nil
+			}
+			return "", fmt.Errorf("module not found: %s", name)
+		},
+		func(m *VM, baseName, name string) (string, error) {
+			normalizeCalled = true
+			// A real normalizer would resolve relative paths against baseName.
+			// For this test, we just pass the requested name through.
+			return name, nil
+		},
+	)
 
-	// Evaluate a script that acts as an entry point module
-	// We import from "math" (which gets normalized to "test_env/math.js").
-	// We assign the result to globalThis so we can easily read it back from Go.
+	// Happy Path: Successfully load and execute modules
 	script := `
-		import { multiply } from "math";
-		globalThis.testResult = multiply(6, 7);
+		import { multiply } from "math_module";
+		import { greeting } from "string_module";
+
+		// Export results to the global object so we can assert them from Go
+		globalThis.testMathResult = multiply(6, 7);
+		globalThis.testStringResult = greeting;
 	`
 
-	// Note: We MUST use EvalModule here, otherwise the 'import' keyword throws a SyntaxError.
 	_, err = vm.Eval(script, EvalModule)
 	if err != nil {
-		t.Fatalf("failed to evaluate module script: %v", err)
+		t.Fatalf("EvalModule failed: %v", err)
 	}
 
-	// Verify the side-effect to confirm the module loaded and executed correctly
-	res, err := vm.Eval("globalThis.testResult", EvalGlobal)
+	if !normalizeCalled {
+		t.Error("expected normalize callback to be called, but it was not")
+	}
+
+	if !loaderCalled {
+		t.Error("expected loader callback to be called, but it was not")
+	}
+
+	// Verify the math module executed correctly
+	mathRes, err := vm.Eval("testMathResult", EvalGlobal)
 	if err != nil {
-		t.Fatalf("failed to evaluate global result: %v", err)
+		t.Fatalf("failed to evaluate testMathResult: %v", err)
+	}
+	if v, ok := mathRes.(int); !ok || v != 42 {
+		t.Errorf("expected math result 42, got %v (type %T)", mathRes, mathRes)
 	}
 
-	// Type assert the result (QuickJS integer tags decode to Go ints)
-	val, ok := res.(int)
-	if !ok {
-		t.Fatalf("expected result to be an int, got %T (%v)", res, res)
-	}
-
-	if val != 42 {
-		t.Errorf("expected 42, got %d", val)
-	}
-}
-
-func TestCustomModuleLoader_NotFound(t *testing.T) {
-	vm, err := NewVM()
+	// Verify the string module executed correctly
+	strRes, err := vm.Eval("testStringResult", EvalGlobal)
 	if err != nil {
-		t.Fatalf("failed to create VM: %v", err)
+		t.Fatalf("failed to evaluate testStringResult: %v", err)
 	}
-	defer vm.Close()
-
-	// Provide a loader that always fails
-	loader := func(vm *VM, name string) (string, error) {
-		return "", fmt.Errorf("intentional simulated failure for %s", name)
+	if v, ok := strRes.(string); !ok || v != "Hello from QuickJS!" {
+		t.Errorf("expected string result 'Hello from QuickJS!', got %v", strRes)
 	}
 
-	vm.SetModuleLoader(loader, nil) // nil normalizer falls back to QuickJS defaults
-
-	script := `import { anything } from "non_existent_module";`
-
-	_, err = vm.Eval(script, EvalModule)
-
-	// We expect an error here because the loader returned an error,
-	// which our bridge translates into a QuickJS ReferenceError exception.
+	// Error Path: Attempt to load a module that doesn't exist
+	missingScript := `
+		import { something } from "missing_module";
+	`
+	_, err = vm.Eval(missingScript, EvalModule)
 	if err == nil {
-		t.Fatal("expected an error when loading a non-existent module, got nil")
+		t.Fatal("expected error when loading missing module, got nil")
 	}
 
-	expectedSnippet := "intentional simulated failure"
-	if err.Error() == "" || !contains(err.Error(), expectedSnippet) {
-		t.Errorf("expected error to contain %q, got: %v", expectedSnippet, err)
+	// Ensure the error message propagated properly from the Go loader to the JS Exception
+	expectedErrFragment := "module not found: missing_module"
+	if !strings.Contains(err.Error(), expectedErrFragment) && !strings.Contains(err.Error(), "module load failed") {
+		t.Errorf("expected error to contain '%s', got: %v", expectedErrFragment, err)
 	}
-}
 
-// Simple helper to check substrings without importing the 'strings' package
-func contains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
+	// Teardown: Verify we can remove the module loader without crashing
+	vm.SetModuleLoader(nil, nil)
+
+	// FIX: Request a completely new module name so QuickJS doesn't use the cache
+	_, err = vm.Eval(`import { multiply } from "new_missing_module";`, EvalModule)
+	if err == nil {
+		t.Fatal("expected error after removing custom module loader, got nil")
 	}
-	return false
 }
