@@ -750,7 +750,7 @@ func TestBytecode(t *testing.T) {
 	// You can also use this chance to document that something changed.
 	// See: https://gitlab.com/cznic/quickjs/-/merge_requests/3#note_2862847634
 	hex := hex.EncodeToString(bytecode)
-	if g, e := hex, "05000c000600a4010001000200000801a601000000bf2ac03a019ccf28a4010400001b0600"; g != e {
+	if g, e := hex, "05000c000600a8010001000200000801aa01000000bf2ac03a019ccf28a8010400001b0600"; g != e {
 		t.Fatalf("got %s, expected %s", g, e)
 	}
 
