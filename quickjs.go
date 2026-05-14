@@ -15,29 +15,15 @@
 // Geomeans of time/op over a set of benchmarks, relative to CCGO, lower number
 // is better. Detailed results available in the testdata/benchmarks directory.
 //
-//	 CCGO: modernc.org/quickjs@v0.16.3
-//	 GOJA: github.com/dop251/goja@v0.0.0-20251008123653-cf18d89f3cf6
-//	  QJS: github.com/fastschema/qjs@v0.0.5
-//
-//		                        CCGO     GOJA     QJS
-//		-----------------------------------------------
-//		        darwin/amd64    1.000    1.169    0.952
-//		        darwin/arm64    1.000    1.106    0.928
-//		       freebsd/amd64    1.000    1.271    0.866    (qemu)
-//		       freebsd/arm64    1.000    1.064    0.746    (qemu)
-//		           linux/386    1.000    1.738   59.275    (qemu)
-//		         linux/amd64    1.000    1.942    1.014
-//		           linux/arm    1.000    2.215   85.887
-//		         linux/arm64    1.000    1.315    1.023
-//		       linux/loong64    1.000    1.690   68.809
-//		       linux/ppc64le    1.000    1.306   44.612
-//		       linux/riscv64    1.000    1.370   55.163
-//		         linux/s390x    1.000    1.359   45.084    (qemu)
-//		       windows/amd64    1.000    1.338    1.034
-//		       windows/arm64    1.000    1.516    1.205
-//		-----------------------------------------------
-//		                        CCGO     GOJA     QJS
-//
+//  CCGO: modernc.org/quickjs@v0.18.1
+//  GOJA: github.com/dop251/goja@v0.0.0-20260311135729-065cd970411c
+//   QJS: github.com/fastschema/qjs@v0.0.6 
+//  
+//	                        CCGO     GOJA     QJS
+//	-----------------------------------------------
+//	         linux/amd64    1.000    1.423    1.139
+//	-----------------------------------------------
+//	                        CCGO     GOJA     QJS
 // # Notes
 //
 // Parts of the documentation were copied from the quickjs documentation, see
@@ -1812,3 +1798,4 @@ func customModuleLoader(tls *libc.TLS, ctx uintptr, module_name uintptr, opaque 
 
 	return ptr
 }
+

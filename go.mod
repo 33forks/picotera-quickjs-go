@@ -3,7 +3,7 @@ module modernc.org/quickjs
 go 1.25.0
 
 require (
-	golang.org/x/mod v0.33.0
+	golang.org/x/mod v0.36.0
 	modernc.org/fileutil v1.4.0
 	modernc.org/libc v1.72.3
 	modernc.org/libquickjs v0.12.8
