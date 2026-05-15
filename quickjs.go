@@ -31,6 +31,7 @@
 //	       linux/riscv64    1.000    1.668   60.587
 //	         linux/s390x    1.000    1.219   45.730    (qemu)
 //	       windows/amd64    1.000    1.330    1.050
+//	       windows/arm64    1.000    1.511    1.200
 //	-----------------------------------------------
 //	                        CCGO     GOJA     QJS
 // # Notes
@@ -1807,4 +1808,5 @@ func customModuleLoader(tls *libc.TLS, ctx uintptr, module_name uintptr, opaque 
 
 	return ptr
 }
+
 
