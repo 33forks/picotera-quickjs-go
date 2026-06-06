@@ -453,6 +453,17 @@ const (
 
 var evalFN = [...]byte{'<', 'e', 'v', 'a', 'l', '>', 0}
 
+func cFilename(tls *libc.TLS, filename string) (uintptr, error) {
+	if filename == "" {
+		return 0, fmt.Errorf("filename must not be empty")
+	}
+	p, err := libc.CString(filename)
+	if err != nil {
+		return 0, fmt.Errorf("OOM")
+	}
+	return p, nil
+}
+
 // Eval evaluates a script or module source in 'javascript'.
 //
 //	Javascript result type  Go result type                          Go result error
@@ -468,17 +479,27 @@ var evalFN = [...]byte{'<', 'e', 'v', 'a', 'l', '>', 0}
 //	object                  *Object                                 nil
 //	any other type          Unsupported                             nil
 func (m *VM) Eval(javascript string, flags int) (r any, err error) {
+	return m.EvalFile(javascript, "<eval>", flags)
+}
+
+// EvalFile evaluates a script or module source in 'javascript', using
+// filename as QuickJS source metadata for errors and stack traces.
+func (m *VM) EvalFile(javascript, filename string, flags int) (r any, err error) {
 	tls := m.runtime.tls
 	ctx := m.cContext
 	ps, err := libc.CString(javascript)
 	if err != nil {
 		return nil, fmt.Errorf("OOM")
 	}
-
 	defer libc.Xfree(tls, ps)
+	pfn, err := cFilename(tls, filename)
+	if err != nil {
+		return nil, err
+	}
+	defer libc.Xfree(tls, pfn)
 
 	m.configureInterrupt()
-	return m.value(lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(javascript)), uintptr(unsafe.Pointer(&evalFN)), int32(flags)), true)
+	return m.value(lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(javascript)), pfn, int32(flags)), true)
 }
 
 // EvalThis is like eval but sets javascript 'this' to 'obj'.
@@ -509,17 +530,27 @@ func (m *VM) EvalThis(obj Value, javascript string, flags int) (r any, err error
 // Note: See the [Value] documentation for details about manual memory
 // management of Value objects.
 func (m *VM) EvalValue(javascript string, flags int) (r Value, err error) {
+	return m.EvalValueFile(javascript, "<eval>", flags)
+}
+
+// EvalValueFile evaluates a script or module source in 'javascript', using
+// filename as QuickJS source metadata, and returns the resulting Value.
+func (m *VM) EvalValueFile(javascript, filename string, flags int) (r Value, err error) {
 	tls := m.runtime.tls
 	ctx := m.cContext
 	ps, err := libc.CString(javascript)
 	if err != nil {
 		return r, fmt.Errorf("OOM")
 	}
-
 	defer libc.Xfree(tls, ps)
+	pfn, err := cFilename(tls, filename)
+	if err != nil {
+		return r, err
+	}
+	defer libc.Xfree(tls, pfn)
 
 	m.configureInterrupt()
-	v := lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(javascript)), uintptr(unsafe.Pointer(&evalFN)), int32(flags))
+	v := lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(javascript)), pfn, int32(flags))
 	if isException(v) {
 		lib.XFreeValue(tls, ctx, v)
 		return r, m.errFromException()
@@ -623,13 +654,19 @@ func (m *VM) EvalBytecodeValue(bytecode []byte) (r Value, err error) {
 //
 // Note: The bytecode format is linked to a given QuickJS version.
 func (m *VM) Compile(javascript string, flags int) ([]byte, error) {
+	return m.CompileFile(javascript, "<eval>", flags)
+}
+
+// CompileFile compiles the bytecode representation of the passed script,
+// using filename as QuickJS source metadata for syntax errors.
+func (m *VM) CompileFile(javascript, filename string, flags int) ([]byte, error) {
 	tls := m.runtime.tls
 	ctx := m.cContext
 	// https://github.com/bellard/quickjs/blob/eb2c89087def1829ed99630cb14b549d7a98408c/qjsc.c#L346-L360
 
 	flags |= lib.MJS_EVAL_FLAG_COMPILE_ONLY
 
-	v, err := m.eval(javascript, flags)
+	v, err := m.evalFile(javascript, filename, flags)
 	if err != nil {
 		return nil, err
 	}
@@ -661,6 +698,10 @@ func (m *VM) Compile(javascript string, flags int) ([]byte, error) {
 }
 
 func (m *VM) eval(js string, flags int) (r lib.TJSValue, err error) {
+	return m.evalFile(js, "<eval>", flags)
+}
+
+func (m *VM) evalFile(js, filename string, flags int) (r lib.TJSValue, err error) {
 	tls := m.runtime.tls
 	ctx := m.cContext
 	ps, err := libc.CString(js)
@@ -669,9 +710,14 @@ func (m *VM) eval(js string, flags int) (r lib.TJSValue, err error) {
 	}
 
 	defer libc.Xfree(tls, ps)
+	pfn, err := cFilename(tls, filename)
+	if err != nil {
+		return r, err
+	}
+	defer libc.Xfree(tls, pfn)
 
 	m.configureInterrupt()
-	return lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(js)), uintptr(unsafe.Pointer(&evalFN)), int32(flags)), nil
+	return lib.XJS_Eval(tls, ctx, ps, libc.Tsize_t(len(js)), pfn, int32(flags)), nil
 }
 
 // GlobalObject returns m's global object.
@@ -961,6 +1007,8 @@ func (m *VM) newObject(v lib.TJSValue) (r *Object, err error) {
 var (
 	toStringC = [...]byte{'t', 'o', 'S', 't', 'r', 'i', 'n', 'g', 0}
 	toString  = uintptr(unsafe.Pointer(&toStringC[0]))
+	stackC    = [...]byte{'s', 't', 'a', 'c', 'k', 0}
+	stackProp = uintptr(unsafe.Pointer(&stackC[0]))
 )
 
 // value "unpacks" 'v'. FreeValue(v) is called before returning, 'v' must not
@@ -1039,7 +1087,20 @@ func (m *VM) errFromException() error {
 
 	defer lib.XJS_FreeCString(tls, ctx, p)
 
-	return fmt.Errorf("%s", libc.GoString(p))
+	message := libc.GoString(p)
+	stack := lib.XJS_GetPropertyStr(tls, ctx, e, stackProp)
+	defer lib.XFreeValue(tls, ctx, stack)
+	if !isException(stack) && tag(stack) != lib.EJS_TAG_UNDEFINED && tag(stack) != lib.EJS_TAG_NULL {
+		sp := lib.XToCString(tls, ctx, stack)
+		if sp != 0 {
+			defer lib.XJS_FreeCString(tls, ctx, sp)
+			if s := libc.GoString(sp); s != "" {
+				return fmt.Errorf("%s\n%s", message, s)
+			}
+		}
+	}
+
+	return fmt.Errorf("%s", message)
 }
 
 // StdAddHelpers adds the 'print' and 'console' global objects to 'm'.

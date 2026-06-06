@@ -65,7 +65,7 @@ func testEval1(t *testing.T) {
 		if err != nil {
 			switch x := test.v.(type) {
 			case error:
-				if g, e := err.Error(), x.Error(); g != e {
+				if g, e := err.Error(), x.Error(); !strings.Contains(g, e) {
 					t.Fatalf("FAIL %s: %v %v", test.js, g, e)
 				}
 
@@ -151,6 +151,54 @@ func testEval3(t *testing.T) {
 		default:
 			t.Errorf("unexpected result type: %T", x)
 		}
+	}
+}
+
+func TestEvalFile_RuntimeStackUsesFilename(t *testing.T) {
+	m, err := NewVM()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+
+	_, err = m.EvalFile("function fail() {\n  throw new Error('boom');\n}\nfail();", "script:test-eval.js", EvalGlobal)
+	if err == nil {
+		t.Fatalf("want runtime error, got nil")
+	}
+	if got := err.Error(); !strings.Contains(got, "Error: boom") || !strings.Contains(got, "script:test-eval.js:2:") {
+		t.Fatalf("error did not include named runtime stack: %v", got)
+	}
+}
+
+func TestEvalValueFile_RuntimeStackUsesFilename(t *testing.T) {
+	m, err := NewVM()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+
+	_, err = m.EvalValueFile("(function () {\n  throw new Error('boom');\n})();", "script:test-eval-value.js", EvalGlobal)
+	if err == nil {
+		t.Fatalf("want runtime error, got nil")
+	}
+	if got := err.Error(); !strings.Contains(got, "Error: boom") || !strings.Contains(got, "script:test-eval-value.js:2:") {
+		t.Fatalf("error did not include named runtime stack: %v", got)
+	}
+}
+
+func TestCompileFile_SyntaxErrorUsesFilename(t *testing.T) {
+	m, err := NewVM()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+
+	_, err = m.CompileFile("var ok = 1;\nvar bad = ;", "script:test-compile.js", EvalGlobal)
+	if err == nil {
+		t.Fatalf("want syntax error, got nil")
+	}
+	if got := err.Error(); !strings.Contains(got, "SyntaxError") || !strings.Contains(got, "script:test-compile.js:2:") {
+		t.Fatalf("error did not include named syntax location: %v", got)
 	}
 }
 
