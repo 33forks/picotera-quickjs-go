@@ -1648,7 +1648,10 @@ func (v Value) MarshalJSON() (r []byte, err error) {
 
 	defer lib.XJS_FreeCString(tls, ctx, p)
 
-	return libc.GoBytes(p, int(l)), nil
+	newBytes := libc.GoBytes(p, int(l))
+	safeBytes := make([]byte, len(newBytes))
+	copy(safeBytes, newBytes)
+	return safeBytes, nil
 }
 
 // Dup returns a copy of 'v' while updating its reference count.
